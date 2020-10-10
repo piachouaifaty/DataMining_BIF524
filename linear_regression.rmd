@@ -1,0 +1,340 @@
+---
+title: "Linear Regression"
+author: "Pia Chouaifaty"
+output: html_document
+---
+
+## Loading libraries
+
+```{r}
+library(MASS)
+library(ISLR)
+```
+
+## Simple Linear Regression
+
+Using the boston data
+
+```{r}
+names(Boston)
+```
+
+To get information on the dataframe  
+```{r}
+?Boston
+```
+
+Summary of Boston  
+
+```{r}
+summary(Boston)
+```
+
+
+```{r}
+attach(Boston)
+```
+
+We begin by plotting some variables  
+twiddle between medv and lstat, we are saying the response is medv (vertical axis):
+
+```{r}
+plot(medv~lstat, Boston)
+# ~: "is modeled as" and lstat is the single predictor in this case
+```
+
+We will fit a linear model to the data
+
+```{r}
+fit1=lm(medv~lstat, data=Boston)
+fit1
+```
+negative coefficient  
+gives a brief summary  
+for a more detailed summary, use the summary() function
+
+```{r}
+summary(fit1)
+```
+we see that the std errors, t values and p values are all significant 
+  
+We add our linear model to the plot using the abline function
+```{r}
+plot(medv~lstat, Boston)
+abline(fit1, lwd=3, col="red")
+
+#abline can be used to plot any line
+#abline(a, b) intercept a, slope b
+
+#residuals are high when fitted values are high
+#mid fitted values have lower residuals
+```
+
+To see what other components are on the linear model we just created:  
+
+```{r}
+names(fit1)
+```
+
+```{r}
+coef(fit1)
+```
+
+
+```{r}
+confint(fit1)
+#confidence intervals for coefficients 95% 
+#B0 = [33.44, 35,65] CI
+#b1 = [-1.02, -0.87]
+
+#Y = B0 + B1x
+#Y is medv, x is lstat
+```
+
+```{r}
+predict(fit1, data.frame(lstat=(c(5,10,15))), interval="confidence") 
+#we need a data frame to predict and inside, we create a variable that has the same name as the predictor, and provide a vector with the values we want to predict - Y(medv) using X(lstat) using fit1, I predict medv using lstat values
+
+#lwr and upr are obtained using the confidence interval (roughly 95%) lower bound and upper bound
+#changing B0 and B1 --> B^1
+
+#in CI: B0^ -+ 1.96*SE 
+#       B1^ -+ 1.96*SE
+#lowest 95% prediction
+
+```
+
+```{r}
+predict(fit1, data.frame(lstat=(c(5,10,15))), interval="prediction")
+#no longer using 95% CI, this is the minimum prediction value I can get for each of the lstat values
+#note that the prediction will always be wider than the CI (using more sd's) - but the fit is the same between the two
+# Y^= B0^ + B1x^
+
+#better to use the CI rather than the prediction in order to avoid potential outliers
+```
+
+```{r}
+par(mfrow=c(2,2)) #dividing the plot into 4, we get all 4 plots in one go instead of clicking on the fig to get the second
+#all plots will be generated later on in 2x2
+plot(fit1)
+
+#residuals vs fitted:
+#small/high values high residuals (my model is not working well)
+#middle values lower residuals (my model works pretty well)
+#plot(predict(fit1), residuals(fit1))
+
+#Normal Q-Q quatiles plot
+#standardized (normalized)
+# black points should appear on the dotted line, when they shift then I have a difference between expected quartiles and values
+#plot(predict(fit1), rstudent(fit1))
+
+#Scale-Location
+#plot(hatvalues(fit1))
+
+#Residuals vs Leverage
+#which.max(hatvalues(fit1))
+#Highlight which points have the highest residuals
+# the higher the leverage, the more problematic the values (215, 413, 375) bigger changing effect on coefficient
+```
+
+
+```{r}
+par(mfrow=c(1,1)) 
+```
+
+# Multiple Regression Model
+
+```{r}
+#The syntax lm(y~x1+x2+x3) is used to fit a model with three predictors, x1, x2, and x3. The summary() function now outputs the regression coefficients for all the predictors.
+
+fit2=lm(medv~lstat+age, data=Boston)
+summary(fit2)
+
+#predict medv using lstat and age
+#now we have 2 coefficients
+#age is significant, but not as much as lstat
+#for the multiple regression model, adjusted r-squared is 0.5495, meaning we slightly improved it
+```
+
+
+```{r}
+fit3=lm(medv~., Boston)
+#all predictors except medv
+summary(fit3)
+
+#most are significant, some are not
+#age now is not significant, when it was with just lstat, it was significant
+#other predictors are very correlated, in their presence, age is no longer significant
+#this is a case where fwd and bckwd selection might yield very different models
+
+#r-squared is improved
+
+```
+
+To access the individual components of a summary  
+
+```{r}
+?summary.lm
+#tells us what we can see in summary
+summary(fit3)$r.squared
+#returns only the r-squared from the summary
+```
+
+```{r}
+summary(fit3)$sigma
+#returns the RSE
+```
+
+```{r}
+par(mfrow=c(2,2)) 
+plot(fit3)
+```
+
+
+```{r}
+fit4=update(fit3, ~.-age-indus)
+#fit3 same response
+#. replaces whatever model
+#-age - indus removes them
+summary(fit4)
+
+#indus and age were removed, everything left is highly significant
+#if I can get a model with a lower number of predictors and the same r-squared, it's better
+```
+
+# Non-linear terms and Interactions
+
+```{r}
+fit5=lm(medv~lstat*age, Boston)
+#* means interaction: interaction between lstat and age
+#we will get the seperately and the interaction
+#main effect not significant, but interaction is
+summary(fit5)
+
+#age and lstat might be appearing to influence each other: should calculate interaction between them
+```
+
+
+## Quadratic Models
+
+```{r}
+fit6=lm(medv~lstat+I(lstat^2), Boston) ; summary(fit6)
+#quadratic term : we previously observed a non-linear relationship
+#need to protect it using the I() identity function
+#both linear and quadratic coefficients are strongly significant
+```
+
+Other than using R-squared to assess how good a model is, we can use ANOVA
+```{r}
+anova(fit1, fit6)
+
+#anova performs a hypothesis test comparing the two models. 
+#H0: the two models fit the data equally well
+#HA: the second model is better
+#fstat is 135 and p-value very small
+
+
+```
+
+```{r}
+attach(Boston)
+par(mfrow=c(1,1)) #1 by 1 layout
+plot(medv~lstat)
+```
+```{r}
+#we can't use abline anymore because it only works if we have a straight line fit
+plot(medv~lstat)
+#for each value of lstat, the fitted values from fit 6
+points(lstat, fitted(fit6), col="red", pch=20)
+
+#this fit is using the poly function
+fit7=lm(medv~poly(lstat, 4)) #4th degree polynomial (blue)
+#might fall in the trap of overfitting
+points(lstat, fitted(fit7), col="blue", pch=20)
+```
+
+We are not restricted to just polynomial transformations, we can try a log transformation of the data
+
+```{r}
+summary(lm(medv~log(rm), data=Boston))
+```
+
+### PCH Characters
+
+```{r}
+plot(1:20, 1:20, pch=1:20, cex=2)
+#characters used 
+#cex is the size of the characters
+```
+
+# Qualitative predictors
+
+```{r}
+cseats = Carseats
+names(Carseats)
+summary(Carseats)
+#quantitative variables, you get mean std var, etc
+#for qualitiative variables we get a list of possible values
+```
+
+```{r}
+cfit1=lm(Sales~.+Income:Advertising+Age:Price, Carseats)
+#fitting a model for sales and all parameters with an interaction between income & advertising, age & price
+#since we included all the predictors already, we can use : intead of * for the interaction
+# : means just add the interaction
+# * means add the individual predictors and the interaction term
+summary(cfit1)
+#income and advertising seem significant, but price and age are not
+```
+
+ShelveLoc was a qualitative variable, the contrasts function shows how R will code that variable when it's put in a linear model
+```{r}
+contrasts(Carseats$ShelveLoc)
+```
+In this case it's a 3 level factor, so it puts in 2 dummy variables:  
+If ShelveLoc is bad, 0 for both  
+If it's good, the first would be 1, the second 0  
+If it's medium, the first would be 0, the second 1  
+
+```{r}
+?contrasts
+#to learn about contrasts and how to set them
+```
+
+
+# Writing R Functions
+
+Writing an R function to fit a regression model and make a plot
+```{r}
+
+regplot=function(x,y)
+{
+  fit=lm(y~x)
+  plot(x,y)
+  abline(fit, col="red")
+}
+
+
+```
+
+```{r}
+attach(Carseats)
+
+regplot(Price, Sales)
+```
+
+```{r}
+regplot=function(x,y,...) #... means we have unnamed arguments but we are allowed to add more arguuments
+{
+  fit=lm(y~x)
+  plot(x,y,...) #whatever extra parameters I add when calling the function will be added to plot()
+  abline(fit, col="red")
+}
+
+regplot(Price, Sales, xlab="Price", ylab="Sales", col="blue", pch=20)
+
+```
+
+
+
+
