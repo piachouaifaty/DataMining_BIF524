@@ -88,12 +88,12 @@ yield identical linear regression models. In this lab, we will perform linear re
 
 ```{r}
 #library(boot)
-glmfit=glm(mpg~horsepower, data=Auto)
+glmfit=glm(mpg~horsepower, data=Auto) #cv.glm default k=n
 cv_err=cv.glm(Auto, glmfit)
 cv_err$delta
 ```
 
-The cv.glm() function produces a list with several components. The two numbers in the delta vector contain the cross-validation results. In this case the numbers are identical (up to two decimal places) and correspond to the LOOCV statistic given in (5.1). Below, we discuss a situation in which the two numbers differ. Our cross-validation estimate for the test error is approximately 24.23.  
+The cv.glm() function produces a list with several components. The two numbers in the delta vector contain the cross-validation results. In this case the numbers are identical (up to two decimal places) and correspond to the LOOCV statistic given in (5.1). The second is corrected for bias. Below, we discuss a situation in which the two numbers differ. Our cross-validation estimate for the test error is approximately 24.23.  
 We can repeat this procedure for increasingly complex polynomial fits. To automate the process, we use the for() function to initiate a for loop which iteratively fits polynomial regressions for polynomials of order i = 1 to i = 5, computes the associated cross-validation error, and stores it in the ith element of the vector cv.error. We begin by initializing the vector. This command will likely take a couple of minutes to run.
 
 ```{r}
@@ -101,7 +101,7 @@ cv_error=rep(0,5) #replicates the number 0,  5 times
 for(i in 1:5)
 {
   glmfit=glm(mpg~poly(horsepower, i), data=Auto)
-  cv_error[i]=cv.glm(Auto, glmfit)$delta[1]
+  cv_error[i]=cv.glm(Auto, glmfit)$delta[1] #actual cross-validation error: delta[2] is the adjusted cv error
 }
 
 cv_error
@@ -117,6 +117,10 @@ The cv.glm() function can also be used to implement k-fold CV. Below we use k = 
 ```{r}
 set.seed(17)
 cv_error_10=rep(0,10)
+
+#write own cross-validation code
+#dig deep into certain bias inside the folds
+#doing cross validation for another model
 
 for (i in 1:10)
 {
@@ -144,27 +148,30 @@ alphafn=function(data, index)
 {
   X=data$X[index]
   Y=data$Y[index]
-  return((var(Y)-cov(X,Y))/(var(X)+var(Y)-2*cov(X,Y)))
+  return((var(Y)-cov(X,Y))/(var(X)+var(Y)-2*cov(X,Y))) #investment in slides
 }
+
+#write own bootstrap function
 ```
 
 This function returns, or outputs, an estimate for α based on applying (5.7) to the observations indexed by the argument index. For instance, the following command tells R to estimate α using all 100 observations.  
 
 ```{r}
-alphafn(Portfolio, 1:100)
+alphafn(Portfolio, 1:100) #calculated a^1 of first 100 elements from portfolio dataset
 ```
 
 The next command uses the sample() function to randomly select 100 observations from the range 1 to 100, with replacement. This is equivalent to constructing a new bootstrap data set and recomputing αˆ based on the new data set.
 
 ```{r}
 set.seed(1)
-alphafn(Portfolio, sample(100,100, replace = T))
+alphafn(Portfolio, sample(100,100, replace = T)) #one bootstrap iteration based on 100 indeces only
 ```
 
 We can implement a bootstrap analysis by performing this command many times, recording all of the corresponding estimates for α, and computing the resulting standard deviation. However, the boot() function automates this approach. Below we produce R = 1, 000 bootstrap estimates for α.
 
 ```{r}
-boot(Portfolio, alphafn, R=1000)
+boot(Portfolio, alphafn, R=1000) #here we used the entire dataset 
+#alpha, bias, std error
 ```
 
 The final output shows that using the original data, αˆ = 0.5758, and that the bootstrap estimate for SE(αˆ) is 0.0886.
@@ -175,10 +182,12 @@ The bootstrap approach can be used to assess the variability of the coefficient 
 We first create a simple function, boot.fn(), which takes in the Auto data set as well as a set of indices for the observations, and returns the intercept and slope estimates for the linear regression model. We then apply this function to the full set of 392 observations in order to compute the estimates of β0 and β1 on the entire data set using the usual linear regression coefficient estimate formulas from Chapter 3.
 
 ```{r}
+#bootstrap for a linear model
 bootfn=function(data, index)
 {return(coef(lm(mpg~horsepower, data=data, subset=index)))}
-
-bootfn(Auto, 1:392)
+#runs a bootstrap on the linear model 
+bootfn(Auto, 1:392) #bootstrapping on all the data (392)
+#returns the coefficients
 ```
 
 The boot.fn() function can also be used in order to create bootstrap estimates for the intercept and slope terms by randomly sampling from among the observations with replacement. Here we give two examples.
@@ -194,7 +203,11 @@ bootfn(Auto, sample(392,392, replace = T))
 Next, we use the boot() function to compute the standard errors of 1,000 bootstrap estimates for the intercept and slope terms.
 
 ```{r}
-boot(Auto, bootfn, 1000)
+boot(Auto, bootfn, 1000) #B1 has a very very low standard error: it is robust
+#if the bootstrap std errors are relatively high, either high variability in the data or a certain grouping in the data, or the model is not the appropriate one
+#std error: how much the coef are changing from one run to the other
+#conf.int we can calculate the confidence interval for B0 and B1
+#if the confidence intervals don't include 0 then the coef is reliable and statistically significant
 ```
 
 This indicates that the bootstrap estimate for SE(βˆ0) is 0.86, and that the bootstrap estimate for SE(βˆ1) is 0.0074. As discussed in Section 3.1.2, standard formulas can be used to compute the standard errors for the regression coefficients in a linear model. These can be obtained using the summary() function.
@@ -208,12 +221,17 @@ The standard error estimates for βˆ0 and βˆ1 obtained using the formulas fro
 Below we compute the bootstrap standard error estimates and the standard linear regression estimates that result from fitting the quadratic model to the data. Since this model provides a good fit to the data (Figure 3.8), there is now a better correspondence between the bootstrap estimates and the standard estimates of SE(βˆ0), SE(βˆ1) and SE(βˆ2).
 
 ```{r}
-bootfn=function(data, index)
+bootfn=function(data, index) #redefining it for a quadratic model
 {
   coefficients(lm(mpg~horsepower+I(horsepower^2), data=data, subset = index))
 }
+
 set.seed(1)
 boot(Auto, bootfn, 1000)
+
+#we should also calculate the mean squared error of the models to decide between linear and quadratic
+#in this case we cannot decide based on the bootstrap alone
+#using the coefficients from the bootstrap only might be problematic
 ```
 ```{r}
 summary(lm(mpg~horsepower+I(horsepower^2), data = Auto))$coef
