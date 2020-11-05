@@ -42,6 +42,14 @@ rownames(college)=college[,1]
 college=college[,-1]
 ```
 
+*Standardizing the data (usually for KNN)*
+```{r standardizing for KNN}
+standardizedX=scale(Dataset[,-qualitative_variable_index])
+#sd=1, mean=0 for every predictor
+```
+
+
+
 #### Dealing with NAs
 
 *Checking how many NAs*
@@ -290,7 +298,7 @@ ols_step_backward_p(fit)
 ```{r training and test set}
 #Splitting the Data Arbitrarily
 train=(predictor<2005) #condition #boolean vector
-test=Dataset[!train] #subset of dataset that is "false" in train
+test=Dataset[!train,] #subset of dataset that is "false" in train
 dim(test)
 Ytestval=Y[!train] #actual values for the response (category) in the test set
 ```
@@ -309,7 +317,7 @@ summary(logist_reg_fit)$coef[ ,4]
 
 *Predicting*
 ```{r predicting}
-glm_probs = predict(logist_reg_fit, type="response", subset=test) #vector of probabilities for each observation
+glm_probs = predict(logist_reg_fit, test, type="response") #vector of probabilities for each observation
 #predicting over the test set using the training set model
 
 contrasts(Y) #down vs up
@@ -374,5 +382,46 @@ my_threshlold_classes=ifelse(lda_pred$posterior[,1]>0.9, "yes", "no") #yes being
 ```{r fitting the model}
 qda_fit=qda(Y~x1+x2, data=dataset, subset = train)
 qda_fit
+
+#CV????
+
+qda_class=predict(qda_fit, test)$class
+table(qda_class, Ytestval)
+
+#Accuracy
+mean(qda_class==Ytestval)
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+```
+
+### KNN 
+
+```{r fitting the model}
+#1.trainX:  A matrix containing the predictors associated with the training data, labeled 
+#2.testX: A matrix containing the predictors associated with the data for which we wish to make predictions
+#3. trainDirection: A vector containing the class labels for the training observations
+#4. A value for K, the number of nearest neighbors to be used by the classifier.
+
+#test=1:1000
+#train=Dataset[-test,]
+library(class)
+trainX=cbind(pred1, pred2)[train,]
+testX=cbind(pred1, pred2)[!train,] #from the test data
+#trainX=as.matrix((Lag2)[train]) #for single predictors
+#testX=as.matrix((Lag2)[!train])
+trainClass=Y[train]
+
+set.seed(1)
+knn_pred=knn(trainX, testX, trainClass, k=1)
+table(knn_pred, Ytestval)
+
+mean(knn_pred==Ytestval)
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
 ```
 
