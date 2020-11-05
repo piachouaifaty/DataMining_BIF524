@@ -1,0 +1,378 @@
+---
+title: "Scripts"
+author: "Pia Chouaifaty"
+date: "11/4/2020"
+output: html_document
+---
+
+### Reading Files
+
+*CSV*
+```{r csv}
+college = read.csv("/Users/piachouaifaty/ISLR_Data/College.csv")
+#read.csv2 in case the separator is a semicolon instead of a comma
+#read.delim 
+#na.strings = "EMPTY" to set NA values as "EMPTY" instead
+```
+
+*TXT*
+```{r txt}
+Auto=read.table("/Users/piachouaifaty/ISLR_Data/Auto.data", header=T, na.strings = "?")
+```
+
+*EXCEL*
+```{r excel}
+
+```
+
+### Data Pre-Processing
+
+*Checking Dimensions*
+```{r dimensions} 
+dim(dataset)
+```
+
+*Setting Rownames*
+```{r setting rownames}
+rownames(college)=college[,1]
+```
+
+*Deleting column*
+```{r deleting columns}
+college=college[,-1]
+```
+
+#### Dealing with NAs
+
+*Checking how many NAs*
+```{r how many NAs}
+length(which(is.na(dataset)))
+```
+
+*Removing NAs*
+```{r removing NAs}
+#(only if explicitly asked)
+Dataset=na.omit(Dataset)
+```
+
+#### Statistics about Predictors
+
+*Ranges*
+```{r ranges for quantitative}
+v=c("mpg", "cylinders", "displacement", "horsepower", "weight", "acceleration", "year")
+# v is a vector of quantitative predictors
+sapply(Dataset[,v], range)
+
+#if they are already all quantitative
+t(sapply(dataset, range))
+```
+
+*Means, SDs, Medians*
+
+```{r means, sds, medians}
+#where v is a vector of the quantitative predictor names
+
+sapply(Dataset[,v], mean)
+sapply(Dataset[,v], sd)
+sapply(Dataset[,v], median)
+
+#for individual predictor
+mean(Dataset$predictor)
+sd(Dataset$predictor)
+median(Dataset$predictor)
+```
+
+*Min & Max*
+```{r min & max}
+#values for all predictors for observation with the max value in "predictor"
+t(subset(Dataset, predictor == min(Dataset$predictor)))
+t(subset(Dataset, predictor == max(Dataset$predictor)))
+```
+
+*Removing Observations*
+```{r removing observations}
+#(Range)
+Dataset2 = Dataset[-(10:85),] 
+```
+
+*As factor*
+```{r as factor for binary qualitative predictior}
+dataset$predictor=as.factor(dataset$predictor)
+```
+
+*Creating new Predictor, Binning*
+```{r binning - new predictor}
+#1. New predictor "Elite"
+Elite=rep("No", nrow(college))
+
+#2. Condition for new predictor
+Elite[college$Top10perc>50]="Yes"
+
+#3. Transform to qualitative binary factor
+Elite=as.factor(Elite)
+
+#4. Add to dataset
+college=cbind(college, Elite)
+```
+
+*Checking how many observations satisfy a condition*
+```{r observations that satisfy a condition}
+
+length((Dataset$predictor[Dataset$predictor>20]))
+#or
+dim(subset(Dataset, predictor == 1)) 
+```
+
+### Plotting
+
+```{r output dimensions}
+par(mfrow=c(1,1))
+```
+
+*Scatterplot*
+```{r Scatterplot}
+#PAIRED SCATTERPLOT
+pairs(Smarket, col=Smarket$Direction) #[can only use quantitative & qualitative AFTER transforming to factor]
+#col to color by category
+
+#SCATTERPLOT OF 2 PREDICTORS
+plot(college$Accept/college$Apps, college$S.F.Ratio) 
+#or
+plot(predyaxis~predxaxis, Dataset)
+#labels: ylab="", xlab=""
+```
+
+*Plotting Line in Scatterplot*
+```{r abline & points}
+#for a model
+abline(fit, lwd=3, col="red")
+#for a known line
+abline(a, b) #{intercept a, slope b}
+
+#for non-linear models:
+points(Y, fitted(fit), col="red", pch=20)
+
+#legend for multiple lines on plot
+abline()
+abline()
+legend(-1, legend = c("model 1", "model 2"), col=2:3, lwd=3)
+
+```
+
+*Boxplot*
+```{r Boxplot}
+plot(dataset$quantitativepredictor, dataset$anypredictor)
+#Automatically creates a boxplot if first predictor is quantitative
+```
+
+*Histogram*
+```{r Histogram}
+hist(dataset$predictor, breaks = 10)
+
+#with conditions
+hist(Dataset$predictor[Dataset$predictor>30])
+```
+
+*Plotting for outliers*
+```{r plotting for outliers}
+plot(predict(fit), rstudent(fit))
+```
+
+### Simulating data
+```{r random data}
+set.seed(1)
+x=rnorm(100)
+y=2*rnorm(100)
+```
+
+### Linear Regression
+
+```{r fitting linear models}
+fit=lm(Y~x1+x2+x3+x4, data=dataset)
+
+#no intercept
+fit=lm(y~x+0)
+
+#all predictors
+fit=lm(Y~., dataset)
+
+#all except
+fit=lm(Y~.-x1-x2, dataset)
+
+#Interactions
+#between x1 & x2:
+fit=lm(Y~x1*x2, dataset)
+
+#all predictors + interaction
+fit=lm(Y~.+x1:x2+x3:x4, dataset)
+
+#QUAD/POLYNOMIAL
+#Squared:
+fit=lm(Y~x+I((x2)^2), dataset)
+#Higher degree
+fit=lm(Y~poly(x, 4))
+```
+
+*Extracting info from fits*
+```{r fit info}
+names(fit)
+coef(fit)
+summary(fit)$r.squared #R^2 of the model
+summary(fit)$sigma #gives the RSE of the model
+summary(fit)$coefficients[,"Pr(>|t|)"] #p-value for each coef
+```
+
+*Correlations*
+```{r correlation matrix}
+cor(dataset)
+
+#if we want to exclude qualitative variable
+cor(subset(dataset, select=-qualpred))
+cor(Dataset[,-9]) #removing a column
+```
+
+*Function that fits & Plots at once*
+```{r function to fit & plot}
+regplot=function(y,x,...) #... means we have unnamed arguments but we are allowed to add more arguuments
+{
+  fit=lm(y~x)
+  plot(x,y,...) #whatever extra parameters I add when calling the function will be added to plot()
+  abline(fit, col="red")
+}
+regplot(Y, X, xlab="Response name", ylab="Predictor name", col="blue", pch=20)
+```
+
+*Dummy Variables*
+```{r dummy variables - constrasts}
+contrasts(dataset$quantpredictor)
+```
+
+*Comparing fits, ANOVA*
+```{r comparing fits ANOVA}
+anova(fit1, fit2)
+ #large f-stat, small p-val, second model better
+```
+
+*Predictions, Confidence Intervals*
+```{r predictions and confint}
+#general confidence interval (95%)
+confint(fit)
+
+#predict for specific values of predictors
+predict(fit, data.frame(predictor=(c(5,10,15))), interval="confidence")
+predict(fit, data.frame(predictor=(c(5,10,15))), interval="prediction") 
+```
+
+*Diagnostic Plots for fit*
+```{r fit diagnostic plot}
+par(mfrow=c(2,2))
+plot(fit)
+```
+
+### Variable Selection
+```{r forward-backward-best}
+#All Subset Regression
+ols_step_all_possible(fit)
+
+# Best Subset Regression
+ols_step_best_subset(fit)
+
+# Stepwise Forward Regression
+ols_step_forward_p(fit)
+
+# Stepwise Backward Regression
+ols_step_backward_p(fit)
+```
+
+### Logistic Regression
+
+*Training Set*
+```{r training and test set}
+#Splitting the Data Arbitrarily
+train=(predictor<2005) #condition #boolean vector
+test=Dataset[!train] #subset of dataset that is "false" in train
+dim(test)
+Ytestval=Y[!train] #actual values for the response (category) in the test set
+```
+
+*Fitting the model*
+```{r fitting model}
+logist_reg_fit = glm(Y~X1+X2+X3..., data=dataset, family=binomial, subset=train)
+
+#coefficients:
+coef(logist_reg_fit)
+summary(logist_reg_fit)$coef
+
+#p-values:
+summary(logist_reg_fit)$coef[ ,4]
+```
+
+*Predicting*
+```{r predicting}
+glm_probs = predict(logist_reg_fit, type="response", subset=test) #vector of probabilities for each observation
+#predicting over the test set using the training set model
+
+contrasts(Y) #down vs up
+#the category with value=1 is the one for which we are predicting the probability (alphabetical by default)
+
+#no: contrast 0
+#glm_pred=rep("no", (number_of_observations))
+#glm_pred[glm_probs>.5]="yes" #yes constrast 1
+#or
+glm_pred=ifelse(glm_probs>0.5, "yes", "no") #no need to specify the number of observations
+
+#Confusion Matrix:
+table(glm_pred, Ytestval)
+
+#Accuracy: (TP+TN)/Total
+mean(glm_pred==Ytestval)
+#Test set error: 
+mean(glm_pred!=Ytestval)
+
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+#PREDICTING FOR GIVEN VALUES
+predict(logist_reg_fit, newdata = data.frame(predictor1=c(1.2,1.5), predictor2=c(1.1,-0.8)), type="response")
+```
+
+### Linear Discriminant Analysis (LDA)
+
+```{r fitting the model}
+lda_fit = lda(Y~x1+x2, data=Dataset, subset=train)
+lda_fit
+plot(lda_fit) #produces plots of the linear discriminants
+```
+
+```{r predicting}
+lda_pred = predict(lda_fit, test)
+names(lda_pred) #the names are  class, contains LDA’s predictions about the movement of the market. posterior, matrix whose kth column contains the posterior probability that the corresponding observation belongs to the kth class, x contains the linear discriminants
+
+lda_class = lda_pred$class #the class predictions of our fitted model on test data
+table(lda_class, Ytestval) #predictions vs real values of test data
+contrasts(Y) #the one with value=1 is the one for which we are getting the posterior probability
+
+#Accuracy
+mean(lda_class==Ytestval) #this is the accuracy
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+sum(lda_pred$posterior[,1]>=0.5) #observations with predicted proba >0.5
+sum(lda_pred$posterior[,1]<0.5)
+
+#MY OWN POSTERIOR PROBABILITY THRESHOLD
+sum(lda_pred$posterior[,1]>0.9) #observations with predicted proba >0.9
+my_threshlold_classes=ifelse(lda_pred$posterior[,1]>0.9, "yes", "no") #yes being the one with contrast=1
+```
+
+### Quadratic Discriminant Analysis (QDA)
+
+```{r fitting the model}
+qda_fit=qda(Y~x1+x2, data=dataset, subset = train)
+qda_fit
+```
+
