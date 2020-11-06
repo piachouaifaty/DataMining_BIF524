@@ -22,7 +22,8 @@ Auto=read.table("/Users/piachouaifaty/ISLR_Data/Auto.data", header=T, na.strings
 
 *EXCEL*
 ```{r excel}
-
+library(xlsx)
+tbl1 = read.xlsx("/Users/piachouaifaty/Book1.xlsx", sheetIndex = 1)
 ```
 
 ### Data Pre-Processing
@@ -105,6 +106,7 @@ Dataset2 = Dataset[-(10:85),]
 
 *As factor*
 ```{r as factor for binary qualitative predictior}
+#CAREFUL, if you declare as factor, CANNOT CALCULATE COR
 dataset$predictor=as.factor(dataset$predictor)
 ```
 
@@ -121,6 +123,8 @@ Elite=as.factor(Elite)
 
 #4. Add to dataset
 college=cbind(college, Elite)
+#Auto = data.frame(Auto, mpg01)
+
 ```
 
 *Checking how many observations satisfy a condition*
@@ -233,8 +237,7 @@ summary(fit)$coefficients[,"Pr(>|t|)"] #p-value for each coef
 *Correlations*
 ```{r correlation matrix}
 cor(dataset)
-
-#if we want to exclude qualitative variable
+#NEED to exclude qualitative variable + AS FACTORS
 cor(subset(dataset, select=-qualpred))
 cor(Dataset[,-9]) #removing a column
 ```
@@ -422,6 +425,5 @@ mean(knn_pred==Ytestval)
 #FPR=(FP/total negatives)x100 = 1-specificity = Type I error
 #overall error=(FP+FN)/total x100
 #sensitivity = TPR = (TP/Total positives) x100
-
 ```
 
