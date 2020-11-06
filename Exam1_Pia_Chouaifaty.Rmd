@@ -100,12 +100,62 @@ oldpeak is also negatively correlated
 *10. Use the bootstrap method to estimate the standard error of the logistic regression coefficients. How do they compare to the ones obtained without bootstrap?*
 
 ```{r}
-bootfn = function(data, index) return(coef(glm(target ~ sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data = data, family = binomial, subset = index)))
+boot.fn = function(data, index) return(coef(glm(target~sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data=data, family=binomial, subset=index)))
 
+library(boot)
+boot(data = heart, statistic = boot.fn, R = 100)
 
 ```
 
+*11. Assess the model you choose using cross-validation by taking only 75% of the data as train and 25% of the data as test. Run the cross-validation 100 times and report the average test error and its standard error.*
 
+```{r}
+cv_err=cv.glm(heart, logistfit, K=4)
+cv_err$delta[1]
+```
+
+```{r}
+
+set.seed(1)
+cv_error_k=rep(0,100)
+loop=1:100
+for (i in loop)
+{
+    cv_err=cv.glm(heart, logistfit, K=4)
+    err=cv_err$delta[1]
+    cv_error_k[i]=err
+}
+
+mean(cv_error_k)
+sd(cv_error_k)
+```
+Average test error (not corrected for bias) is 0.1323453 after running it 100 times
+0.003553571 sd
+*12. Build an LDA and a QDA model using only the attributes you obtained in “part 7” and compute their classification error using the 75/25 cross-validation approach you used in “part 11”.*
+
+```{r}
+
+
+lda_fit = lda(target~sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data=heart)
+lda_fit
+lda_class = lda_pred$class #the class predictions of our fitted model on test data
+table(lda_class, Ytestval) #predictions vs real values of test data
+contrasts(Y) #the one with value=1 is the one for which we are getting the posterior probability
+
+#Accuracy
+mean(lda_class==Ytestval) #this is the accuracy
+
+qda_fit=qda(target~sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data=heart)
+qda_fit
+qda_class=predict(qda_fit, test)$class
+table(qda_class, Ytestval)
+
+#Accuracy
+mean(qda_class==Ytestval)
+```
+
+
+sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal 
 
 
 
