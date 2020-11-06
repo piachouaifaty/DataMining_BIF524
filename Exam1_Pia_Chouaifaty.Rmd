@@ -9,22 +9,107 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+heart=read.table("/Users/piachouaifaty/heart.txt", header=T, na.strings = "?")
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+attach(heart)
+summary(heart)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+heart$restecg=as.factor(heart$restecg)
+heart$exang=as.factor(heart$exang)
+heart$thal=as.factor(heart$thal)
+heart$target=as.factor(heart$target)
+heart$sex=as.factor(heart$sex)
+
+
+summary(heart)
+```
+
+min=0 in chol  
+there are outliers
+
+```{r}
+indeces=c(which(heart$chol==0))
+indeces
+heart[indeces, "chol"]=median(chol)
+summary(heart)
+```
+
+
+```{r}
+pairs(heart)
+```
+
+
+```{r}
+dim(heart)
+```
+303 samples, 14 predictors
+
+Variables:  
+1) age: continuous  
+2) sex: *categorical*  
+3) chest pain type (4 values): *categorical*  
+4) resting blood pressure: continous
+5) serum cholestoral in mg/dl: continuous  
+6)fasting blood sugar > 120 mg/dl: continuous  
+7) resting electrocardiographic results (values 0,1,2): continous  
+8) maximum heart rate achieved: continous  
+9) exercise induced angina: *categorical*
+10) oldpeak = ST depression induced by exercise relative to rest: continous  
+11)the slope of the peak exercise ST segment: continous  
+12) number of major vessels (0-3) colored by flourosopy: *categorical*
+13) thal: 0 = normal; 1 = fixed defect; 2 = reversable defect: *cateogrical*
+14) target: 0= less chance of heart attack 1= more chance of heart attack: *categorical*
+
+*5. Based on this data, provide an estimate of the someone in the population has a heart attack.*
+```{r}
+
+```
+
+*6. Fit a logistic regression model using the complete data. Based on that model, which predictors/atttributes you believe should be kept?*
+
+```{r}
+logistregfit = glm(target~., data=heart, family=binomial)
+summary(logistregfit)
+```
+Based on the p-values of the predictors in the logistic regression fit, sex, cp, ca, exang, and ca are statistically significant in predicting target.  
+
+*7. Follow a step wise approach to check which predictors/attributes will remain and ca be used to estimate the chances of having a heart attack.*
+```{r}
+s=step(logistregfit) #both forward and backward
+```
+
+The model with the lowest AIC is the one with predictors: sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal 
+
+*8. What is the error rate of the model having only the remaining predictors/attributes.*  
+
+```{r}
+logistfit=glm(target~sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data=heart, family=binomial)
+summary(logistfit)
+```
+Residual deviance: 212.60  
+The most significant are sex(-), cp(+), thalach(+), exang(-)if category=1, oldpeak(-), and ca(-).  
+Males in real life are at higher risk of heart attack, so I am assuming that sex=1 is female since it is negatively correlated with the risk of heart attack. Chest pain is positively correlated with the risk of having a heart attack and is the second most signficant after ca and sex. thalach is positively correlated. exang is negatively correlated, so I am also assuming value=1 means not having had an exercise induced angina?  
+oldpeak is also negatively correlated   
+
+*10. Use the bootstrap method to estimate the standard error of the logistic regression coefficients. How do they compare to the ones obtained without bootstrap?*
+
+```{r}
+bootfn = function(data, index) return(coef(glm(target ~ sex + cp + chol + thalach + exang + oldpeak + slope + ca + thal, data = data, family = binomial, subset = index)))
+
+
+```
+
+
+
+
+
+
+
+
+
