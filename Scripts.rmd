@@ -427,3 +427,33 @@ mean(knn_pred==Ytestval)
 #sensitivity = TPR = (TP/Total positives) x100
 ```
 
+### Validation Set Approach
+```{r random validation set}
+set.seed(1)
+train=sample(392, 196) #randomly pick 196 numbers from 1:392 which will be the indeces of the training sample
+fit=lm(Y~x, data=Dataset, subset = train)
+#test MSE Estimate
+mean((Y-predict(fit, Dataset))[-train]^2)
+
+#for quadratic
+fit2=lm(Y~poly(x, 2), data=Dataset, subset=train)
+#test MSE
+mean((Y-predict(fit2, Dataset))[-train]^2)
+
+#for cubic
+fit3=lm(Y~poly(x, 3), data=Dataset, subset=train)
+#test MSE
+mean((Y-predict(x, Dataset))[-train]^2)
+
+#If we choose a different training set instead, then we will obtain somewhat different errors on the validation set
+```
+
+### LOOCV
+```{r}
+#glm() to fit a model without passing in the family argument, it performs linear regression
+#cv.glm() only works for glm()
+
+
+```
+
+
