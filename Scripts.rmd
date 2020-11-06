@@ -64,6 +64,20 @@ length(which(is.na(dataset)))
 Dataset=na.omit(Dataset)
 ```
 
+*Replacing NAs with Average*
+
+```{r column averaging}
+dataset$column_header = ifelse(is.na(dataset$column_header), ave(dataset$column_header, FUN = function(x) mean(x, na.rm = 'TRUE')), dataset$column_header)
+
+#The above code blocks check for missing values in the age and salary columns and update the missing cells with the column-wise average.
+#dataset$column_header: Selects the column in the dataset specified after $ (age and salary).
+#is.na(dataset$column_header): This method returns true for all the cells in the specified column with no values.
+#ave(dataset$column_header, FUN = function(x) mean(x, na.rm = ‘TRUE’)): Ths method calculates the average of the column passed as argument.
+
+dataset$col_to_round = as.numeric(format(round(dataset$col_to_round, 0)))
+#if we have a value that shouldn't be in decimal like age for ex, optional
+```
+
 #### Statistics about Predictors
 
 *Ranges*
@@ -89,6 +103,17 @@ sapply(Dataset[,v], median)
 mean(Dataset$predictor)
 sd(Dataset$predictor)
 median(Dataset$predictor)
+```
+
+*Standard Error of Sample Mean of Predictor*
+```{r standard error of sample mean}
+pred.err = sd(pred)/sqrt(length(pred))
+#Hint: We can compute the standard error of the sample mean by dividing the sample standard deviation by the square root of the number of observations
+```
+
+*Percentiles & Quantiles*
+```{r Percentiles & Quantiles}
+perc = quantile(predictor, c(0.1)) #10th percentile of predictor
 ```
 
 *Min & Max*
@@ -134,6 +159,12 @@ length((Dataset$predictor[Dataset$predictor>20]))
 #or
 dim(subset(Dataset, predictor == 1)) 
 ```
+
+*95 % confidence interval for the mean of a predictor*
+```{r confidence interval}
+t.test(predictor)
+```
+
 
 ### Plotting
 
@@ -195,6 +226,8 @@ plot(predict(fit), rstudent(fit))
 set.seed(1)
 x=rnorm(100)
 y=2*rnorm(100)
+
+Data = data.frame(x, y)
 ```
 
 ### Linear Regression
@@ -349,6 +382,28 @@ mean(glm_pred!=Ytestval)
 predict(logist_reg_fit, newdata = data.frame(predictor1=c(1.2,1.5), predictor2=c(1.1,-0.8)), type="response")
 ```
 
+*Function that combines all these steps*
+```{r function that splits and gets the error}
+#SET SEED FOR CONSISTENCY
+#RANDOMIZED SPLIT
+myf = function() {
+  
+    #set.seed()
+    #splitting into training and validation set
+    train = sample(dim(Dataset)[1], dim(Dataset)[1]/2)
+    # fitting model using training
+    glmfit = glm(Y ~ x1 + x2, data = Dataset, family = binomial, subset = train)
+    # predict
+    glmpred = rep("No", dim(Dataset)[1]/2) #"No" replace with contrasts=1
+    glmprobs = predict(glm.fit, Default[-train, ], type = "response")
+    glmpred[glm.probs > 0.5] = "Yes"
+    # validation set error
+    return(mean(glmpred != Dataset[-train, ]$Y))
+}
+myf()
+```
+
+
 ### Linear Discriminant Analysis (LDA)
 
 ```{r fitting the model}
@@ -449,11 +504,183 @@ mean((Y-predict(x, Dataset))[-train]^2)
 ```
 
 ### LOOCV
-```{r}
-#glm() to fit a model without passing in the family argument, it performs linear regression
+```{r LOOCV}
+#glm() to fit a model without passing in the family argument, it performs linear regression, like lm()
 #cv.glm() only works for glm()
 
-
+glmfit=glm(Y~x, data=Dataset)
+cv_err=cv.glm(Dataset, glmfit) #cv.glm default k=n
+#cv.glm() function produces a list with several components
+cv_err$delta #delta contain 2 results of cv, second is corrected for bias
 ```
+
+*Computing CV Error for Multiple Degrees*
+```{r computing cv error for multiple degrees}
+#FUNCTION THAT COMPUTES CV ERROR FOR MULTIPLE DEGREES
+cv_error_loocv=rep(0,n) #replicates the number 0,  n times
+degree=1:n
+for(d in degree)
+{
+  glmfit=glm(Y~poly(X, d), data=Dataset)
+  cv_error_loocv[d]=cv.glm(Dataset, glmfit)$delta[1] #actual cross-validation error: delta[2] is the adjusted cv error
+}
+cv_error_loocv #vector with the cv errors of all the tested models
+plot(degree, cv_error_loocv, type="b") #gives a plot of cv errors for each polynomial degree of our model
+```
+
+*Computing CV Error for additional degrees of same predictor*
+
+```{r update poly }
+
+#Y = β0 + β1X + ε
+#Y = β0 + β1X + β2X^2 + ε
+#Y = β0 +β1X +β2X^2 +β3X^3 +ε... so on
+
+set.seed(1)
+glm.fit = glm(y ~ x)
+cv.glm(Data, glm.fit)$delta
+glmfit=glm(Y~x, data=Dataset)
+errorloocv=rep(0, n) #replicates the number 0,  n times
+errorloocv[1]=cv.glm(Dataset, glmfit)$delta[1]
+degree=2:n
+for(d in degree)
+{
+  glmfit=update(glmfit, . ~ . + poly(x,d))
+  errorloocv[d]=cv.glm(Dataset, glmfit)$delta[1] #actual cross-validation error: delta[2] is the adjusted cv error
+}
+errorloocv #vector with the cv errors of all the tested models
+```
+
+
+*Custom LOOCV Function*
+```{r computing classification error}
+count = rep(0, dim(Dataset)[1])
+for (i in 1:(dim(Dataset)[1])) {
+    glm.fit = glm(Y ~ x1 + x2, data = Dataset[-i, ], family = binomial)
+    is_up = predict.glm(glm.fit, Dataset[i, ], type = "response") > 0.5
+    #is_up should be replaced by is_contrasts=1
+    is_true_up = Dataset[i, ]$Y == "Up"
+    #whatever classification for contrasts=1
+    if (is_up != is_true_up) 
+        count[i] = 1
+}
+sum(count) #total number of errors
+mean(count) #test error rate for LOOCV
+```
+
+
+### K-Fold Cross Validation
+k-fold cross-validation is implemented by taking the set of n observations and randomly splitting into k non-overlapping groups. Each of these groups acts as a validation set and the remainder as a training set. The test error is estimated by averaging the k resulting MSE estimates.
+
+```{r}
+glmfit=glm(Y~x, data=Dataset)
+cv_err=cv.glm(Dataset, glmfit, K=10) #change K
+
+#FUNCTION THAT COMPUTES K-FOLD CV ERROR FOR MULTIPLE DEGREES
+set.seed(1)
+cv_error_k=rep(0,n)
+degree=1:n
+for (d in degree)
+{
+  glmfit=glm(Y~poly(x,d), data=Dataset)
+  cv_error_k[d]=cv.glm(Dataset, glmfit, K=10)$delta[1]
+  #change K according to preference
+}
+cv_error
+plot(degree, cv_error_k, type="b")
+
+#if we already plotted the same plot for loocv and wish to add the k fold line to it in red
+#lines(degree, cv_error_k, type="b", col="red")
+```
+
+### Bootstrap
+*Getting the Standard Error of an Estimate*
+```{r bootstrap for estimates}
+alphafn=function(data, index) #indeces
+{
+  X=data$X[index]
+  Y=data$Y[index]
+  return((var(Y)-cov(X,Y))/(var(X)+var(Y)-2*cov(X,Y))) #investment in slides #return any other function
+}
+
+#calculate estimate from first 100 elements of dataset:
+alphafn(Dataset, 1:100) 
+
+#one bootstrap iteration based on 100 indeces only
+set.seed(1)
+alphafn(Dataset, sample(100,100, replace = T)) 
+
+#here we used the entire dataset 
+bootout=boot(Dataset, alphafn, R=1000)
+bootout #gives summary of bootstrap
+#original+-stderror
+
+plot(bootout)
+```
+
+*Estimating the Accuracy of a Linear Model*
+```{r bootstrap for accuracy}
+#assess the variability of the coefficient estimates and predictions from a statistical learning method
+
+bootfn=function(data, index)
+{return(coef(lm(Y~X, data=data, subset=index)))} #change Y and X, can also change the return value
+bootfn(Dataset, 1:392) #returns the estimate for the subset of indices 1-->392
+
+set.seed(1)
+bootfn(Dataset, sample(392,392, replace = T)) #1 bootstrap iteration of a random bootstrap sample
+boot(Dataset, bootfn, 1000) #1000 bootstrap iterations, returns the standard error of the coefficients in this case
+#if the bootstrap std errors are relatively high, either high variability in the data or a certain grouping in the data, or the model is not the appropriate one
+
+#bootstrap approach does not rely on any of these assumptions, and so it is likely giving a more accurate estimate of the standard errors of βˆ0 and βˆ1 than is the summary() function for a fit
+
+##FOR A QUADRATIC MODEL
+bootfn=function(data, index) #redefining it for a quadratic model
+{
+  coefficients(lm(Y~X+I(X^2), data=data, subset = index)) #change Y and X
+}
+set.seed(1)
+boot(Dataset, bootfn, 1000)
+
+#we should also calculate the mean squared error of the models to decide between linear and quadratic
+#in this case we cannot decide based on the bootstrap alone
+#using the coefficients from the bootstrap only might be problematic
+
+#LOGISTIC REGRESSION
+boot.fn = function(data, index) {return(coef(glm(Y ~ x1 + x2,
+    data = Dataset, family = binomial, subset = index)))}
+library(boot)
+boot(Dataset, boot.fn, 50)
+```
+
+*SE Mean of a Predictor Using Bootstrap*
+```{r standard error of mean}
+#here data is the predictor itself (medv)
+boot.fn = function(data, index) return(mean(data[index]))
+library(boot)
+bstrap = boot(predictor, boot.fn, 1000)
+bstrap
+```
+
+*SE Median of a Predictor Using Bootstrap*
+```{r}
+library(boot)
+#here data is the predictor itself (medv)
+boot.fn = function(data, index) return(median(data[index]))
+boot(predictor, boot.fn, 1000)
+```
+
+*Confidence Interval Using Bootstrap*
+```{r confidence interval using bootstrap}
+#here this is specific for the mean of a predictor
+#95%
+#c(bstrap$t0 - (2 * SE of mean), bstrap$t0 + (2 * SE of mean))
+```
+
+*Bootstrap for Percentile of a Predictor*
+```{r bootstrap for 10th percentile of a predictor}
+boot.fn = function(data, index) return(quantile(data[index], c(0.1)))
+boot(predictor, boot.fn, 1000)
+```
+
 
 
