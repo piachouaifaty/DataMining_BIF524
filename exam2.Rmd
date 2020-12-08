@@ -75,34 +75,34 @@ summary(logistreg)$coef[ ,4]
 
 ```{r}
 library(boot)
+set.seed(4706)
 logistreg = glm(popularity~., data=data2, family=binomial, subset=train)
-cv_err=cv.glm(data2[train,], logistreg, K=10) #change K
-
+cv_err=cv.glm(data2[train,], logistreg, K=10)
 ```
 
-
+```{r}
+logistcverror = cv_err$delta
+logistcverror 
+```
 
 *Predicting*
 ```{r predicting}
-glm_probs = predict(logist_reg_fit, test, type="response") #vector of probabilities for each observation
-#predicting over the test set using the training set model
+logistprob = predict(logistreg, test, type="response") 
 
-contrasts(Y) #down vs up
+contrasts(data2[,"popularity"]) #down vs up
 #the category with value=1 is the one for which we are predicting the probability (alphabetical by default)
+```
 
-#no: contrast 0
-#glm_pred=rep("no", (number_of_observations))
-#glm_pred[glm_probs>.5]="yes" #yes constrast 1
-#or
-glm_pred=ifelse(glm_probs>0.5, "yes", "no") #no need to specify the number of observations
+```{r predicting}
+glm_pred=ifelse(logistprob>0.5, "1", "0") #no need to specify the number of observations
 
 #Confusion Matrix:
-table(glm_pred, Ytestval)
+table(glm_pred, popularity.test)
 
 #Accuracy: (TP+TN)/Total
-mean(glm_pred==Ytestval)
+mean(glm_pred==popularity.test)
 #Test set error: 
-mean(glm_pred!=Ytestval)
+mean(glm_pred!=popularity.test)
 
 #FNR=(FN/total positives)x100
 #FPR=(FP/total negatives)x100 = 1-specificity = Type I error
@@ -110,27 +110,175 @@ mean(glm_pred!=Ytestval)
 #sensitivity = TPR = (TP/Total positives) x100
 
 #PREDICTING FOR GIVEN VALUES
-predict(logist_reg_fit, newdata = data.frame(predictor1=c(1.2,1.5), predictor2=c(1.1,-0.8)), type="response")
+#predict(logist_reg_fit, newdata = data.frame(predictor1=c(1.2,1.5), predictor2=c(1.1,-0.8)), type="response")
 ```
 
-*Function that combines all these steps*
-```{r function that splits and gets the error}
-#SET SEED FOR CONSISTENCY
-#RANDOMIZED SPLIT
-myf = function() {
-  
-    #set.seed()
-    #splitting into training and validation set
-    train = sample(dim(Dataset)[1], dim(Dataset)[1]/2)
-    # fitting model using training
-    glmfit = glm(Y ~ x1 + x2, data = Dataset, family = binomial, subset = train)
-    # predict
-    glmpred = rep("No", dim(Dataset)[1]/2) #"No" replace with contrasts=1
-    glmprobs = predict(glm.fit, Default[-train, ], type = "response")
-    glmpred[glm.probs > 0.5] = "Yes"
-    # validation set error
-    return(mean(glmpred != Dataset[-train, ]$Y))
-}
-myf()
+Test set error: 0.268
+
+```{r}
+logistreg
 ```
+
+```{r}
+#coefficients:
+coef(logistreg)
+summary(logistreg)$coef
+
+#p-values:
+summary(logistreg)$coef[ ,4]
+```
+
+danceability, energy, key, acousticness, valence, tempo, duration_ms, time_signature, chorus_hit, decade are the most statistically significant
+
+Lasso
+
+```{r}
+x=model.matrix(popularity~., data2)[,-16] #to remove the intercept
+y=data2[,"popularity"]
+#automatically transforms any qualitative variables into dummy variables
+
+grid=10^seq(10, -2, length=100) #10 to the power of a sequence -> our lambda values
+grid
+
+#Fitting on training data
+lasso.mod=glmnet(x[train,], y[train], alpha=1, lambda=grid, family = "binomial")
+plot(lasso.mod)
+```
+
+```{r}
+#Getting best lambda
+set.seed(4706)
+cv.out=cv.glmnet(x[train,], y[train], alpha=1, family = "binomial")
+plot(cv.out)
+bestlam=cv.out$lambda.min #lambda.min=lambda with lowest error
+bestlam
+```
+
+```{r}
+lasso.pred=predict(lasso.mod, s=bestlam, newx=x[test,])
+table(pred.pred, popularity.test)
+```
+
+```{r}
+#Refitting on full data using best lambda
+out=glmnet(x, y, alpha=1, lambda=grid, family = "binomial")
+lasso.coef=predict(out, type="coefficients", s=bestlam)
+lasso.coef
+```
+
+TREE
+
+```{r}
+data2.test=data2[-train,]
+tree.data2=tree(popularity~., data2, subset = train)
+tree.pred=predict(tree.data2, data2.test, type="class")
+table(tree.pred, popularity.test)
+```
+
+```{r}
+(178+181)/(178+69+72+181)
+(69+72)/(178+69+72+181)
+```
+
+
+```{r pruning with cv}
+#FUN=prune.misclass in order to indicate that we want the classification error rate to guide the cross-validation and pruning process, rather than the default for the cv.tree() function, which is deviance
+#cost complexity parameter: k corresponds to alpha
+
+set.seed(4706)
+cv.data2=cv.tree(tree.data2, FUN=prune.misclass)
+names(cv.data2)
+#size: num terminal nodes
+#k:alpha
+#dev: cross-vallidation error
+
+cv.data2
+```
+
+```{r plotting according to size and k}
+par(mfrow=c(1,2))
+plot(cv.data2$size, cv.data2$dev, type="b")
+plot(cv.data2$k, cv.data2$dev, type="b")
+```
+
+```{r pruning after cv plotting}
+#best is lowest dev (cv error)
+pruned.data2=prune.misclass(tree.data2, best=5)
+plot(pruned.data2)
+text(pruned.data2, pretty=0)
+```
+
+```{r check pruned tree performance against test set}
+tree.pred=predict(pruned.data2, data2.test, type="class")
+table(tree.pred, popularity.test)
+```
+
+```{r}
+(160+211)/(178+69+72+181)
+```
+ 
+Improved classification after pruning
+
+Random forest
+```{r}
+set.seed(4706)
+rf.data2=randomForest(popularity~.,data=data2, subset=train, importance=TRUE)
+yhat.rf=predict(rf.data2, newdata=data2.test)
+table(yhat.rf, popularity.test)
+```
+
+```{r}
+(190+200)/500
+(50+60)/500
+```
+Improved
+
+```{r}
+importance(rf.data2) #to see the importance of each variable
+
+varImpPlot(rf.data2) #plot
+```
+
+
+```{r boosting}
+library(gbm)
+#g distribution="bernoulli". The argument n.trees=5000 indicates that we want 5000 trees, and the option interaction.depth=3 limits the depth of each tree
+
+set.seed(4706)
+boost.data2=gbm(popularity~.,data=data2[train,], distribution = "gaussian", n.trees=5000, interaction.depth=3)
+#shrinkage=0.001 by default
+#can change it
+boost.data2
+summary(boost.data2)
+
+#bernoulli gave me an error so I did it gaussian even though I know bernoulli is what I should use for binary classification
+```
+
+```{r predict using boost}
+yhat.boost=predict(boost.data2, newdata = data2.test, n.trees=5000)
+table(yhat.boost, popularity.test)
+```
+
+LASSO:
+danceability      3.570254e+00  
+loudness          5.874001e-02  
+mode1             2.103853e-01  
+speechiness      -2.839697e+00  
+acousticness     -2.377173e-01  
+instrumentalness -2.549063e+00  
+liveness         -7.500110e-02  
+valence           4.578401e-02  
+tempo             8.951716e-04  
+duration_ms      -1.828531e-07  
+
+
+Danceability was the most important in both the lasso (least shrunk) and boosting (highest relative influence)  
+The others are not as clearly similar between both methods  
+
+Glm error (all parameters): 0.268  
+TREE error: 0.282  
+RF error: 0.22  
+
+Random forest error was the lowest amonf the ones I found
+
 
