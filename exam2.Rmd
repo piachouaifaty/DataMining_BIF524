@@ -10,6 +10,127 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+data=read.delim("/Users/piachouaifaty/dm_exam2.txt", header = TRUE, sep = "\t")
+```
 
+```{r}
+plot(data)
+```
+
+```{r}
+data2=data[,4:20]
+```
+
+```{r}
+summary(data2)
+```
+
+```{r}
+plot(data2)
+```
+
+```{r}
+length(which(is.na(data2)))
+```
+
+```{r}
+data2[,"popularity"]=as.factor(data2[,"popularity"])
+```
+
+```{r}
+summary(data2)
+#0: not popular
+#1: popular
+```
+
+```{r}
+data2[,"mode"]=as.factor(data2[,"mode"])
+summary(data2)
+```
+
+Training and Test Sets
+```{r}
+set.seed(4706)
+train=sample(1:nrow(data2), nrow(data2)/2)
+test=data2[-train,]
+popularity.test=data2[-train,"popularity"]
+```
+
+
+Logistic Regression
+
+*Fitting the model*
+```{r fitting model}
+logistreg = glm(popularity~., data=data2, family=binomial, subset=train)
+
+#coefficients:
+coef(logistreg)
+summary(logistreg)$coef
+
+#p-values:
+summary(logistreg)$coef[ ,4]
+```
+
+
+
+```{r}
+library(boot)
+logistreg = glm(popularity~., data=data2, family=binomial, subset=train)
+cv_err=cv.glm(data2[train,], logistreg, K=10) #change K
+
+```
+
+
+
+*Predicting*
+```{r predicting}
+glm_probs = predict(logist_reg_fit, test, type="response") #vector of probabilities for each observation
+#predicting over the test set using the training set model
+
+contrasts(Y) #down vs up
+#the category with value=1 is the one for which we are predicting the probability (alphabetical by default)
+
+#no: contrast 0
+#glm_pred=rep("no", (number_of_observations))
+#glm_pred[glm_probs>.5]="yes" #yes constrast 1
+#or
+glm_pred=ifelse(glm_probs>0.5, "yes", "no") #no need to specify the number of observations
+
+#Confusion Matrix:
+table(glm_pred, Ytestval)
+
+#Accuracy: (TP+TN)/Total
+mean(glm_pred==Ytestval)
+#Test set error: 
+mean(glm_pred!=Ytestval)
+
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+#PREDICTING FOR GIVEN VALUES
+predict(logist_reg_fit, newdata = data.frame(predictor1=c(1.2,1.5), predictor2=c(1.1,-0.8)), type="response")
+```
+
+*Function that combines all these steps*
+```{r function that splits and gets the error}
+#SET SEED FOR CONSISTENCY
+#RANDOMIZED SPLIT
+myf = function() {
+  
+    #set.seed()
+    #splitting into training and validation set
+    train = sample(dim(Dataset)[1], dim(Dataset)[1]/2)
+    # fitting model using training
+    glmfit = glm(Y ~ x1 + x2, data = Dataset, family = binomial, subset = train)
+    # predict
+    glmpred = rep("No", dim(Dataset)[1]/2) #"No" replace with contrasts=1
+    glmprobs = predict(glm.fit, Default[-train, ], type = "response")
+    glmpred[glm.probs > 0.5] = "Yes"
+    # validation set error
+    return(mean(glmpred != Dataset[-train, ]$Y))
+}
+myf()
 ```
 
