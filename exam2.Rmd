@@ -48,6 +48,39 @@ data2[,"mode"]=as.factor(data2[,"mode"])
 summary(data2)
 ```
 
+
+```{r}
+pairs(data2)
+```
+
+
+*Scatterplot*
+```{r Scatterplot}
+#PAIRED SCATTERPLOT
+pairs(data2, col=data2$popularity) #[can only use quantitative & qualitative AFTER transforming to factor]
+#col to color by category
+```
+
+```{r Scatterplot}
+#SCATTERPLOT OF 2 PREDICTORS
+plot(data2$popularity, data2$danceability) 
+```
+Songs with higher danceability "SEEM" to be more likely to be popular
+
+*Histogram*
+```{r Histogram}
+hist(data2$danceability, breaks = 10)
+```
+
+
+*Histogram using lattice*
+```{r histogram (lattice)}
+#shows percent of total/specific condition
+library(lattice)
+histogram(~data2$popularity, data2)
+```
+
+
 Training and Test Sets
 ```{r}
 set.seed(4706)
@@ -128,9 +161,9 @@ summary(logistreg)$coef
 summary(logistreg)$coef[ ,4]
 ```
 
-danceability, energy, key, acousticness, valence, tempo, duration_ms, time_signature, chorus_hit, decade are the most statistically significant
+danceability, energy, key, acousticness, valence, tempo, duration_ms, time_signature, chorus_hit, decade are the most statistically significant  
 
-Lasso
+Lasso  
 
 ```{r}
 x=model.matrix(popularity~., data2)[,-16] #to remove the intercept
@@ -180,6 +213,7 @@ table(tree.pred, popularity.test)
 (69+72)/(178+69+72+181)
 ```
 
+Unpruned error: 0.282
 
 ```{r pruning with cv}
 #FUN=prune.misclass in order to indicate that we want the classification error rate to guide the cross-validation and pruning process, rather than the default for the cv.tree() function, which is deviance
