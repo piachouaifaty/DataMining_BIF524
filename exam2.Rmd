@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+ID: 201504706
+
 ```{r}
 data=read.delim("/Users/piachouaifaty/dm_exam2.txt", header = TRUE, sep = "\t")
 ```
@@ -249,9 +251,11 @@ table(tree.pred, popularity.test)
 
 ```{r}
 (160+211)/(178+69+72+181)
+(39+90)/(178+69+72+181)
 ```
+ Pruned error: 0.258
  
-Improved classification after pruning
+Improved classification after pruning  
 
 Random forest
 ```{r}
@@ -265,11 +269,10 @@ table(yhat.rf, popularity.test)
 (190+200)/500
 (50+60)/500
 ```
-Improved
+Improved after random forest
 
 ```{r}
 importance(rf.data2) #to see the importance of each variable
-
 varImpPlot(rf.data2) #plot
 ```
 
@@ -305,14 +308,15 @@ valence           4.578401e-02
 tempo             8.951716e-04  
 duration_ms      -1.828531e-07  
 
-
 Danceability was the most important in both the lasso (least shrunk) and boosting (highest relative influence)  
 The others are not as clearly similar between both methods  
 
+TEST ERRORS:  
 Glm error (all parameters): 0.268  
-TREE error: 0.282  
+Unpruned tree error: 0.282  
+Pruned tree error: 0.258  
 RF error: 0.22  
 
-Random forest error was the lowest amonf the ones I found
+Random forest error was the lowest among the ones I found
 
 
