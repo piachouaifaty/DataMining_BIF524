@@ -5,26 +5,97 @@ date: "12/14/2020"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+### Summary of Attributes
+
+Matrix column entries (attributes):
+name - ASCII subject name and recording number
+MDVP:Fo(Hz) - Average vocal fundamental frequency
+MDVP:Fhi(Hz) - Maximum vocal fundamental frequency
+MDVP:Flo(Hz) - Minimum vocal fundamental frequency
+MDVP:Jitter(%),MDVP:Jitter(Abs),MDVP:RAP,MDVP:PPQ,Jitter:DDP - Several 
+measures of variation in fundamental frequency
+MDVP:Shimmer,MDVP:Shimmer(dB),Shimmer:APQ3,Shimmer:APQ5,MDVP:APQ,Shimmer:DDA - Several measures of variation in amplitude
+NHR,HNR - Two measures of ratio of noise to tonal components in the voice
+status - Health status of the subject (one) - Parkinson's, (zero) - healthy
+RPDE,D2 - Two nonlinear dynamical complexity measures
+DFA - Signal fractal scaling exponent
+spread1,spread2,PPE - Three nonlinear measures of fundamental frequency variation
+
+### Reading in the File
+
+```{r}
+pd = read.csv("/Users/piachouaifaty/parkinson.csv")
 ```
 
-## R Markdown
+```{r}
+length(which(pd$status==0))
+```
+48 measurements for healthy patients  
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+length(which(pd$status==1))
+```
+147 measurements for PD patients  
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+### Averaging Repeated Measurements
+```{r}
+pdavg = pd
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Removing the recording number from the names to be able to match and average them
+```{r}
+#substitutes the characters after the last underscore with a "", so removes them
+pdavg$name = sub("_[^_]+$", "", pdavg$name)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+pdavg
+```
+
+Averaging all the rows using aggregate by name (after removing the recording number, we are left with the individual ids)
+```{r}
+pdavg=aggregate(pdavg[,2:24], list(pdavg$name), mean)
+pdavg
+```
+
+```{r}
+length(which(pdavg$status==0))
+length(which(pdavg$status==1))
+```
+
+8 healthy patients and 24 patients with PD  
+
+### Analysis on Full Dataset (All Measurements)
+
+```{r}
+pd$status=as.factor(pd$status)
+```
+
+```{r}
+summary(pd)
+```
+
+#### Plotting for Visualization
+
+```{r}
+pairs(pd[,-1], col=pd$status)
+#red=parkinson's
+```
+
+```{r}
+plot(pd$PPE, pd$spread1, col=pd$status)
+```
+
+```{r}
+plot(pd$PPE, pd$spread1, col=pd$status)
+```
+
+#### Unsupervised Learning Methods for Visualization
+
+```{r}
+pd2=pd[,-1]
+rownames(pd2) = pd[,1]
+pd2=pd2[,-17]
+pr.out=prcomp(pd, scale=TRUE)
+```
+
