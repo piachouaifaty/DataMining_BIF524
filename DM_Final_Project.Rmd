@@ -5,7 +5,7 @@ date: "12/14/2020"
 output: html_document
 ---
 
-### Summary of Attributes
+## Summary of Attributes
 
 Matrix column entries (attributes):
 name - ASCII subject name and recording number
@@ -21,7 +21,7 @@ RPDE,D2 - Two nonlinear dynamical complexity measures
 DFA - Signal fractal scaling exponent
 spread1,spread2,PPE - Three nonlinear measures of fundamental frequency variation
 
-### Reading in the File
+## Reading in the File
 
 ```{r}
 pd = read.csv("/Users/piachouaifaty/parkinson.csv")
@@ -37,7 +37,7 @@ length(which(pd$status==1))
 ```
 147 measurements for PD patients  
 
-### Averaging Repeated Measurements
+## Averaging Repeated Measurements
 ```{r}
 pdavg = pd
 ```
@@ -49,13 +49,13 @@ pdavg$name = sub("_[^_]+$", "", pdavg$name)
 ```
 
 ```{r}
-pdavg
+head(pdavg)
 ```
 
 Averaging all the rows using aggregate by name (after removing the recording number, we are left with the individual ids)
 ```{r}
 pdavg=aggregate(pdavg[,2:24], list(pdavg$name), mean)
-pdavg
+head(pdavg)
 ```
 
 ```{r}
@@ -65,7 +65,7 @@ length(which(pdavg$status==1))
 
 8 healthy patients and 24 patients with PD  
 
-### Analysis on Full Dataset (All Measurements)
+## Analysis on Full Dataset (All Measurements)
 
 ```{r}
 pd$status=as.factor(pd$status)
@@ -75,7 +75,7 @@ pd$status=as.factor(pd$status)
 summary(pd)
 ```
 
-#### Plotting for Visualization
+### Plotting for Visualization
 
 ```{r}
 pairs(pd[,-1], col=pd$status)
@@ -90,12 +90,62 @@ plot(pd$PPE, pd$spread1, col=pd$status)
 plot(pd$PPE, pd$spread1, col=pd$status)
 ```
 
-#### Unsupervised Learning Methods for Visualization
+### Unsupervised Learning Methods for Visualization
 
 ```{r}
 pd2=pd[,-1]
 rownames(pd2) = pd[,1]
 pd2=pd2[,-17]
-pr.out=prcomp(pd, scale=TRUE)
+pca_pd=prcomp(pd2, scale=TRUE)
 ```
+
+```{r}
+str(pca_pd)
+```
+
+```{r}
+#library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+```
+
+```{r}
+ggbiplot(pca_pd)
+```
+
+```{r}
+biplot(pca_pd, scale=0)
+```
+
+
+```{r}
+ggbiplot(pca_pd, labels=rownames(pd2))
+```
+
+```{r}
+disease_stat=ifelse(pd$status=="1", "PD", "HLT")
+ggbiplot(pca_pd,ellipse=TRUE, groups=disease_stat)
+```
+
+The PD measurements seem to be clustered to the bottom
+
+```{r}
+pca_pd$rotation
+```
+
+Proprotion of Variance Explained by PC1
+
+```{r}
+pr.var=pca_pd$sdev^2
+pve=pr.var/sum(pr.var)
+par(mfrow=c(1,2))
+plot(pve, xlab="Principal Component", ylab="Proportion of Variance Explained ", ylim=c(0,1),type="b")
+plot(cumsum(pve), xlab="Principal Component ", ylab=" Cumulative Proportion of Variance Explained ", ylim=c(0,1), type="b")
+```
+
+PC1 explains 58.9% of the variance.
+
+#### Clustering
+
+
 
