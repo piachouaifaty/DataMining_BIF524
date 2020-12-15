@@ -5,6 +5,13 @@ date: "12/14/2020"
 output: html_document
 ---
 
+Libraries
+```{r}
+library(leaps)
+library(ggbiplot)
+```
+
+
 ## Summary of Attributes
 
 Matrix column entries (attributes):
@@ -90,12 +97,65 @@ plot(pd$PPE, pd$spread1, col=pd$status)
 plot(pd$PPE, pd$spread1, col=pd$status)
 ```
 
-### Unsupervised Learning Methods for Visualization
 
 ```{r}
 pd2=pd[,-1]
 rownames(pd2) = pd[,1]
 pd2=pd2[,-17]
+par(mfrow=c(3,3))
+for (i in colnames(pd2))
+  {hist(pd2[,i], main=i)}
+
+```
+
+```{r}
+par(mfrow=c(1,3))
+for (i in colnames(pd2))
+  {boxplot(pd2[,i], main=i)}
+```
+
+```{r}
+outl=boxplot.stats(pd2[,"MDVP.Flo.Hz."])$out
+ind=which(pd2[,"MDVP.Flo.Hz."] %in% c(outl))
+pd2[c(ind),]
+```
+
+```{r}
+pd[c(ind),]
+```
+
+I check some of the outliers in the MDVP.Flo.Hz. column.  
+5 of them come from the same individual, and the number of "outliers" is very high. Also, the data is skewed in general, so I don't remove any of the outliers. Since the majority of measurements are diseased, and the outliers in one of the columns are all control, I think all the "outliers" are actually just control measurements.  
+I check a few more.
+
+```{r}
+outl=boxplot.stats(pd2[,"MDVP.Fhi.Hz."])$out
+ind=which(pd2[,"MDVP.Fhi.Hz."] %in% c(outl))
+pd[c(ind),]
+```
+In this case many of the outlier measurements come from the same individual.  
+
+```{r}
+outl=boxplot.stats(pd2[,"MDVP.Jitter..."])$out
+ind=which(pd2[,"MDVP.Jitter..."] %in% c(outl))
+pd[c(ind),]
+```
+In this case, outliers come from the same individual.
+
+
+```{r}
+outl=boxplot.stats(pd2[,"MDVP.RAP"])$out
+ind=which(pd2[,"MDVP.RAP"] %in% c(outl))
+pd[c(ind),]
+```
+Here, two individuals are "outliers."  
+Dealing with outliers by either removing them or replacing them with the mean/median seems unnecessary - the data is just skewed in nature. Removing outliers would make the analysis biased.  
+So I decide to keep them.
+Since the data is not normally distributed (many predictors are skewed): will have to normalize it when working with LDA and QDA.
+
+### Unsupervised Learning Methods for Visualization
+
+```{r}
 pca_pd=prcomp(pd2, scale=TRUE)
 ```
 
@@ -106,7 +166,7 @@ str(pca_pd)
 ```{r}
 #library(devtools)
 #install_github("vqv/ggbiplot")
-library(ggbiplot)
+#library(ggbiplot)
 ```
 
 ```{r}
@@ -146,6 +206,65 @@ plot(cumsum(pve), xlab="Principal Component ", ylab=" Cumulative Proportion of V
 PC1 explains 58.9% of the variance.
 
 #### Clustering
+
+Clustering with K=2
+```{r}
+km.pd2=kmeans(pd2,2,nstart=20)
+```
+
+```{r}
+head(km.pd2$cluster)
+```
+
+
+```{r}
+head(pd$status)
+s=ifelse(pd$status==1, 1, 2) #so the colors match
+head(s) 
+```
+
+```{r}
+par(mfrow=c(1,2))
+for (i in colnames(pd2))
+{plot(pd2[,i], col=(km.pd2$cluster), main="K-Means Clustering; K=2", xlab="", ylab=i, pch=20, cex=2)
+plot(pd2[,i], col=(s), main="By Status; black=PD", xlab="", ylab=i, pch=20, cex=2)}
+```
+
+#### Training and Test Sets
+
+```{r}
+pd2=cbind(pd2, pd$status)
+```
+
+```{r}
+colnames(pd2)=c("MDVP.Fo.Hz.",      "MDVP.Fhi.Hz." ,    "MDVP.Flo.Hz."  ,   "MDVP.Jitter..." ,  "MDVP.Jitter.Abs." ,"MDVP.RAP"     ,   "MDVP.PPQ"    ,     "Jitter.DDP"  ,     "MDVP.Shimmer"   ,  "MDVP.Shimmer.dB." ,"Shimmer.APQ3"   ,  "Shimmer.APQ5" ,   
+ "MDVP.APQ"  ,       "Shimmer.DDA"  ,    "NHR" ,             "HNR"    ,          "RPDE"    ,         "DFA"     ,        
+"spread1"     ,     "spread2"      ,    "D2"        ,       "PPE"      ,        "status")
+```
+
+Since there are only 8 healthy individuals (), I make sure to include a sufficient number in the training and test sets, so I split them into healthy vs disease, sample from each, and then combine them into training and test sets.
+
+```{r}
+pd_dis=pd2[which(pd2$status==1),]
+pd_health=pd2[which(pd2$status==0),] 
+pd_dis
+pd_health
+```
+
+
+
+```{r}
+
+```
+
+
+*Best Subset Selection*
+
+```{r}
+regfit_full_pd2=regsubsets(status~.,pd2, nvmax=23)
+summary(regfit_full_pd2)
+```
+
 
 
 
