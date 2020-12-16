@@ -10,7 +10,8 @@ Libraries
 library(leaps)
 library(ggbiplot)
 library(pls)
-
+library(tree)
+library(randomForest)
 ```
 
 
@@ -506,12 +507,125 @@ cv_error=mean(error)
 cv_error
 ```
 
-
 ### Trees
 
+```{r}
+tree.pd=tree(pd[,"status"]~., pd2[,1:22], subset=train)
+summary(tree.pd)
+```
+
+```{r}
+plot(tree.pd)
+text(tree.pd, pretty=0)
+```
+Spread1 seems to be the most important predictor here.
+
+```{r}
+tree.pred=predict(tree.pd, pd2[test,], type="class")
+table(tree.pred, y.test)
+```
+```{r}
+"Accuracy"
+mean(tree.pred==y.test)
+"Error"
+mean(tree.pred!=y.test)
+```
+
+#### Pruning
+
+The test error rate seems good. We consider pruning the tree.
+```{r}
+set.seed(4706)
+cv.pd=cv.tree(tree.pd, FUN=prune.misclass)
+names(cv.pd)
+```
+
+```{r}
+cv.pd
+```
+
+$dev is the CV error rate. It seems to be lowest for tree size 2.
+
+```{r}
+par(mfrow=c(1,2))
+plot(cv.pd$size, cv.pd$dev, type="b", ylab="cv error")
+plot(cv.pd$k, cv.pd$dev, type="b", ylab = "cv error")
+```
+
+Prune the tree and obtain the 2-node tree
+
+```{r}
+pruned.pd=prune.misclass(tree.pd, best=2)
+plot(pruned.pd)
+text(pruned.pd, pretty=0)
+```
+
+```{r}
+pruned.pred=predict(pruned.pd, pd2[test,], type="class")
+table(pruned.pred, y.test)
+```
+
+```{r}
+"Accuracy"
+mean(pruned.pred==y.test)
+"Error"
+mean(pruned.pred!=y.test)
+```
+
+The unpruned tree actually performed better than the pruned tree.
+
+#### Bagging and Random Forest
+
+*BAGGING*
+
+```{r}
+#bagging
+set.seed(4706)
+bag.pd=randomForest(pd2[,"status"]~., pd2[,1:22], subset=train, mtry=13, importance=TRUE)
+#mtry: Number of variables randomly sampled as candidates at each split. Note that the default values are different for classification (sqrt(p) where p is number of variables in x) and regression (p/3)
+bag.pd
+```
 
 
+```{r}
+plot(bag.pd)
+```
 
+
+```{r}
+yhat.bag=predict(bag.pd, newdata = pd2[test,])
+plot(yhat.bag, y.test, xlab="bagging pred", ylab="actual")
+"Error"
+mean(yhat.bag!=y.test)
+"Accuracy"
+mean(yhat.bag==y.test)
+```
+The bagged tree shows the highest accuracy so far, but the OOB estimate of error rate is 13.27%
+
+*RANDOM FOREST*
+
+```{r}
+set.seed(4706)
+rf.pd=randomForest(pd2[,"status"]~., pd2[,1:22], subset=train, mtry=6, importance=TRUE)
+yhat.rf=predict(rf.pd, newdata = pd2[test,])
+rf.pd
+```
+```{r}
+plot(rf.pd)
+```
+
+```{r}
+"Error"
+mean(yhat.rf!=y.test)
+"Accuracy"
+mean(yhat.rf==y.test)
+```
+
+Random Forest performed almost as well as bagging
+
+```{r}
+importance(rf.pd)
+```
 
 #### Best Subset Selection
 
