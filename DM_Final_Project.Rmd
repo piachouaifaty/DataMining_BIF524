@@ -12,6 +12,8 @@ library(ggbiplot)
 library(pls)
 library(tree)
 library(randomForest)
+library(glmnet)
+library(MASS)
 ```
 
 
@@ -154,7 +156,7 @@ pd[c(ind),]
 Here, two individuals are "outliers."  
 Dealing with outliers by either removing them or replacing them with the mean/median seems unnecessary - the data is just skewed in nature. Removing outliers would make the analysis biased.  
 So I decide to keep them.
-Since the data is not normally distributed (many predictors are skewed): will have to normalize it when working with LDA and QDA.
+Since the data is not normally distributed (many predictors are skewed)
 
 ### Unsupervised Learning Methods for Visualization
 
@@ -193,7 +195,7 @@ ggbiplot(pca_pd,ellipse=TRUE, groups=disease_stat)
 The PD measurements seem to be clustered to the bottom
 
 ```{r}
-pca_pd$rotation
+head(pca_pd$rotation)
 ```
 
 Proprotion of Variance Explained by PC1
@@ -258,7 +260,7 @@ offset
 ```{r}
 pd2norm=log(offset+1+pd2[1:22])
 pd2norm=cbind(pd2norm, pd2[,"status"])
-pd2norm
+head(pd2norm)
 ```
 
 ```{r}
@@ -358,6 +360,156 @@ y.test=pd2[c(test), "status"]
 
 ```
 
+#### Best Subset Selection
+
+```{r}
+regfit_full=regsubsets(status~., data=pd2, subset=train, nvmax=23) #nvmax=p
+reg_full_sum=summary(regfit_full) #returns R^2, adjusted R^2, AIC, BIC, Cp
+reg_full_sum
+names(reg_full_sum)
+names(regfit_full)
+```
+
+*Plotting*
+```{r plotting RSS, BIC...}
+par(mfrow=c(2,2))
+
+#RSS
+plot(reg_full_sum$rss, xlab="Number of variables", ylab="RSS", type ="l")
+mnrss=which.min(reg_full_sum$rss)
+#Plotting min RSS
+points(mnrss, reg_full_sum$adjr2[mnrss], col="red", cex=2, pch=20)
+
+#Adjusted R^2
+plot(reg_full_sum$adjr2, xlab="Number of variables", ylab="Adjusted R^2", type ="l")
+mxr2=which.max(reg_full_sum$adjr2)
+#Plotting max adjusted R^2
+points(mxr2, reg_full_sum$adjr2[mxr2], col="red", cex=2, pch=20)
+
+#CP
+plot(reg_full_sum$cp, xlab = "Number of variables", ylab="CP", type = "l")
+mncp=which.min(reg_full_sum$cp)
+points(mncp, reg_full_sum$cp[mncp], col="blue", cex=2, pch=20)
+
+#BIC
+plot(reg_full_sum$bic, xlab="Number of variables", ylab = "BIC", type="l")
+mnbic=which.min(reg_full_sum$bic)
+points(mnbic, reg_full_sum$bic[mnbic], col="green", pch=20, cex=2)
+```
+
+BIC selects for a smaller model (5 predictors) (heavier penalty)  
+CP min chooses around 6.  
+Adjusted R^2 max is around 8.  
+As expected, RSS decreases as more predictors are added, but this is not indicative of test error rate.
+
+*Plotting Selected Variables*
+```{r plotting variables according to BIC, RSS...}
+plot(regfit_full, scale="r2")
+plot(regfit_full, scale="adjr2")
+plot(regfit_full, scale="Cp")
+plot(regfit_full, scale="bic")
+```
+
+*Coef of models*
+```{r}
+"model with highest adjusted R^2"
+coef(regfit_full, mxr2) #model with highest adjusted R^2
+"model with lowest CP"
+coef(regfit_full, mncp) #model with lowest CP
+"model with lowest BIC"
+coef(regfit_full, mnbic) #model with lowest BIC
+```
+
+### Ridge Regression & Lasso
+
+```{r}
+x=model.matrix(status~., pd2)[,-1] #[,-1] to remove the intercept
+y=pd2$status
+#automatically transforms any qualitative variables into dummy variables
+```
+
+#### Ridge Regression
+
+```{r}
+#standardizes by default
+#alpha=0 ridge regression,  alpha=1  lasso
+grid=10^seq(10, -2, length=100) #10 to the power of a sequence -> our lambda values
+grid
+ridge.mod=glmnet(x, y, alpha=0, lambda=grid, family = "binomial")
+#rows (predictors), columns (lambda values)
+```
+
+```{r}
+ridge.mod$lambda[50] #lambda value
+coef(ridge.mod)[,50] #coef for this lambda value (index)
+```
+*Estimating Test Error*
+
+```{r}
+ridge.mod=glmnet(x[train,],y[train],alpha=0,lambda=grid, thresh=1e-12, family = "binomial")
+ridge.pred=predict(ridge.mod,s=4,newx=x[test,])
+mean((ridge.pred-y.test)^2)
+
+#check vs least squares lambda=0
+ridge.pred=predict(ridge.mod, s=0, newx=x[test,], exact = T, x=x[train,], y=y[train]) 
+mean((ridge.pred-y.test)^2)
+
+lm(y~x, subset = train)
+predict(ridge.mod,s=0, exact = T, type="coefficients", x=x[train,], y=y[train])[1:20,]
+```
+
+*Cross Validation for Ridge*
+
+```{r}
+set.seed(4706)
+cv.out=cv.glmnet(x[train,], y[train], alpha=0, family = "binomial")
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+
+#predict on test using best lambda
+ridge.pred=predict(ridge.mod, s=bestlam, newx=x[test,])
+mean((ridge.pred-y.test)^2)
+
+#refit on full data
+out=glmnet(x,y,alpha=0, family = "binomial")
+predict(out,type="coefficients",s=bestlam)[1:20,]
+```
+
+#### Lasso
+
+```{r}
+#Fitting on training data
+lasso.mod=glmnet(x[train,], y[train], alpha=1, lambda=grid, family="binomial")
+plot(lasso.mod)
+```
+
+
+```{r}
+#Getting best lambda 
+set.seed(4706)
+cv.out=cv.glmnet(x[train,], y[train], alpha=1, family="binomial")
+plot(cv.out)
+```
+
+
+```{r}
+bestlam=cv.out$lambda.min #lambda.min=lambda with lowest error
+bestlam
+lasso.pred=predict(lasso.mod, s=bestlam, newx=x[test,])
+mean((lasso.pred!=y.test))
+```
+
+
+```{r}
+#Refitting on full data using best lambda
+out=glmnet(x, y, alpha=1, lambda=grid, family="binomial")
+lasso.coef=predict(out, type="coefficients", s=bestlam)
+lasso.coef
+```
+
+Predictors chosen by lasso: MDVP.Fo.Hz.+MDVP.Fhi.Hz+MDVP.APQ+DFA+spread1+spread2+D2
+
 ### Logistic Regression
 
 I fit a logistic regression model on the training data
@@ -372,6 +524,16 @@ summary(logist_reg_fit)
 
 #"P-Values"
 #summary(logist_reg_fit)$coef[ ,4]
+```
+
+```{r}
+step(logist_reg_fit, direction = "forward")
+```
+
+ MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.Flo.Hz.+MDVP.Jitter...+MDVP.Jitter.Abs.+MDVP.RAP 
+
+```{r}
+step(logist_reg_fit, direction = "backward")
 ```
 
 At first glance, the p-values are all very large, except for DFA, which is smaller but still pretty large.
@@ -402,9 +564,43 @@ Accuracy
 mean(glm_pred==y.test)
 ```
 
+*Using Predictors Chosen By Lasso*
+MDVP.Fo.Hz.+MDVP.Fhi.Hz+MDVP.APQ+DFA+spread1+spread2+D2  
+
+```{r}
+colnames(pd2)
+```
+
+
+```{r}
+logist_reg_fit2=glm(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=pd2, family=binomial, subset=train)
+summary(logist_reg_fit)
+```
+
+```{r}
+glm_probs = predict(logist_reg_fit2, pd2[test,], type="response")
+head(glm_probs)
+glm_pred=ifelse(glm_probs>0.5, 1, 0)
+head(glm_pred)
+```
+
+```{r}
+table(glm_pred, y.test)
+```
+
+```{r}
+"Error"
+mean(glm_pred!=y.test)
+
+"Accuracy"
+
+mean(glm_pred==y.test)
+```
+
+The model improves
 
 ### LDA
-```{r fitting the model}
+```{r}
 lda_fit = lda(status~., data=pd2[,-5], subset=train)
 lda_fit
 plot(lda_fit) #produces plots of the linear discriminants
@@ -441,7 +637,7 @@ sum(lda_pred$posterior[,1]<0.5)
 k=10 #number of folds
 Dataset=pd2
 
-set.seed(1)
+set.seed(4706)
 folds=sample(1:k, nrow(Dataset), replace=TRUE)
 #folds
 Dataset=cbind(Dataset, folds)
@@ -461,9 +657,69 @@ cv_error=mean(error)
 cv_error
 ```
 
+*Using Predictors Selected by Lasso*
+status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2
+
+```{r}
+lda_fit = lda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=pd2[,-5], subset=train)
+lda_fit
+plot(lda_fit) #produces plots of the linear discriminants
+```
+
+```{r }
+lda_pred = predict(lda_fit, pd2[test,])
+names(lda_pred) #the names are  class, contains LDA’s predictions
+
+lda_class = lda_pred$class #the class predictions of our fitted model on test data
+table(lda_class, y.test) #predictions vs real values of test data
+contrasts(pd2[,"status"]) #the one with value=1 is the one for which we are getting the posterior probability
+
+"Accuracy"
+mean(lda_class==y.test)
+"Classification Error"
+mean(lda_class!=y.test)
+
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+sum(lda_pred$posterior[,1]>=0.5) #observations with predicted proba >0.5
+sum(lda_pred$posterior[,1]<0.5)
+
+#MY OWN POSTERIOR PROBABILITY THRESHOLD
+#sum(lda_pred$posterior[,1]>0.9) #observations with predicted proba >0.9
+#my_threshlold_classes=ifelse(lda_pred$posterior[,1]>0.9, "yes", "no") #yes being the one with contrast=1
+```
+
+```{r}
+#CV for LDA
+k=10 #number of folds
+Dataset=pd2
+
+set.seed(4706)
+folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+Dataset=cbind(Dataset, folds)
+table(folds) #to see that they are balanced
+error=vector()#error for each fold
+
+for (j in 1:k) #j refers to folds
+{
+  lda_fit = lda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+  lda_pred = predict(lda_fit, Dataset[folds==j,]) #test data, current fold
+  lda_class = lda_pred$class #the class predictions of our fitted model on test data
+  error=append(error, mean(lda_class!=Dataset[folds==j, "status"])) #cv error
+}
+
+cv_error=mean(error)
+cv_error
+```
+
 ### QDA
 
-```{r fitting the model}
+```{r}
 qda_fit=qda(status~., data=pd2, subset = train)
 qda_fit
 
@@ -498,6 +754,49 @@ error=vector()#error for each fold
 for (j in 1:k) #j refers to folds
 {
   qda_fit = qda(status~., data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+  qda_class=predict(qda_fit, Dataset[folds==j,])$class #test data, current fold
+  error=append(error, mean(qda_class!=Dataset[folds==j, "status"])) #cv error
+}
+
+cv_error=mean(error)
+cv_error
+```
+
+*Using Predictors Selected by Lasso*
+```{r}
+qda_fit=qda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=pd2, subset = train)
+qda_fit
+
+qda_class=predict(qda_fit, pd2[test,])$class
+table(qda_class, y.test)
+
+"Accuracy"
+mean(qda_class==y.test)
+
+"Classification Error"
+mean(qda_class!=y.test)
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+```
+
+```{r}
+#CV for QDA
+k=10 #number of folds
+Dataset=pd2
+
+set.seed(4706)
+folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+Dataset=cbind(Dataset, folds)
+table(folds) #to see that they are balanced
+error=vector()#error for each fold
+
+for (j in 1:k) #j refers to folds
+{
+  qda_fit = qda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
 
   qda_class=predict(qda_fit, Dataset[folds==j,])$class #test data, current fold
   error=append(error, mean(qda_class!=Dataset[folds==j, "status"])) #cv error
@@ -625,169 +924,5 @@ Random Forest performed almost as well as bagging
 
 ```{r}
 importance(rf.pd)
-```
-
-#### Best Subset Selection
-
-```{r}
-regfit_full=regsubsets(status~., data=pd2, subset=train, nvmax=23) #nvmax=p
-reg_full_sum=summary(regfit_full) #returns R^2, adjusted R^2, AIC, BIC, Cp
-reg_full_sum
-names(reg_full_sum)
-names(regfit_full)
-```
-
-*Plotting*
-```{r plotting RSS, BIC...}
-par(mfrow=c(2,2))
-
-#RSS
-plot(reg_full_sum$rss, xlab="Number of variables", ylab="RSS", type ="l")
-mnrss=which.min(reg_full_sum$rss)
-#Plotting min RSS
-points(mnrss, reg_full_sum$adjr2[mnrss], col="red", cex=2, pch=20)
-
-#Adjusted R^2
-plot(reg_full_sum$adjr2, xlab="Number of variables", ylab="Adjusted R^2", type ="l")
-mxr2=which.max(reg_full_sum$adjr2)
-#Plotting max adjusted R^2
-points(mxr2, reg_full_sum$adjr2[mxr2], col="red", cex=2, pch=20)
-
-#CP
-plot(reg_full_sum$cp, xlab = "Number of variables", ylab="CP", type = "l")
-mncp=which.min(reg_full_sum$cp)
-points(mncp, reg_full_sum$cp[mncp], col="blue", cex=2, pch=20)
-
-#BIC
-plot(reg_full_sum$bic, xlab="Number of variables", ylab = "BIC", type="l")
-mnbic=which.min(reg_full_sum$bic)
-points(mnbic, reg_full_sum$bic[mnbic], col="green", pch=20, cex=2)
-```
-
-BIC selects for a smaller model (5 predictors) (heavier penalty)  
-CP min chooses around 6.  
-Adjusted R^2 max is around 8.  
-As expected, RSS decreases as more predictors are added, but this is not indicative of test error rate.
-
-*Plotting Selected Variables*
-```{r plotting variables according to BIC, RSS...}
-plot(regfit_full, scale="r2")
-plot(regfit_full, scale="adjr2")
-plot(regfit_full, scale="Cp")
-plot(regfit_full, scale="bic")
-```
-
-*Coef of models*
-```{r}
-"model with highest adjusted R^2"
-coef(regfit_full, mxr2) #model with highest adjusted R^2
-"model with lowest CP"
-coef(regfit_full, mncp) #model with lowest CP
-"model with lowest BIC"
-coef(regfit_full, mnbic) #model with lowest BIC
-```
-
-### Cross Validating Model Size
-
-Test Matrix
-```{r}
-test.mat=model.matrix(status~.,data=pd2[test,]) #output of the test dataset
-head(test.mat)
-```
-
-```{r}
-k=10
-p=22
-set.seed(1)
-folds=sample(1:k, nrow(pd2), replace=TRUE)
-folds
-table(folds) #to see that it's pretty much balanced
-cv.errors=matrix(NA, k, p, dimnames = list(NULL, paste (1:p)))
-#k rows for each fold
-#p columns for the model complexities (predictors)
-```
-
-```{r}
-for (j in 1:k) #j refers to folds, i refers to predictors
-{
-  best.fit=regsubsets(Salary~.,data=Hitters[folds!=j,], nvmax=p) #this is the training data, those NOT in the current fold
-      for (i in 1:p)
-      {
-        pred=predict(best.fit, Hitters[folds==j,], id=i) #this is the test data, those in the current fold
-        #id = i meaning for each subset size from 1:p
-        #we only called predict, not predict.regsubsets because we wrote our function in a way that the predict function           recognizes -> we give it a regsubsets object
-        cv.errors[j,i]=mean((Hitters$Salary[folds==j]-pred)^2) #compute mean squared error
-      }
-}
-
-cv.errors
-```
-
-
-#### Forward Selection
-
-```{r}
-regfit_fwd = regsubsets(status~.,pd2[train,], nvmax=23, method = "forward")
-summary(regfit_fwd)
-reg_fwd_sum=summary(regfit_fwd) #returns R^2, adjusted R^2, AIC, BIC, Cp
-reg_fwd_sum
-names(reg_fwd_sum)
-names(regfit_fwd)
-
-```
-*Plotting*
-```{r}
-par(mfrow=c(2,2))
-
-#RSS
-plot(reg_fwd_sum$rss, xlab="Number of variables", ylab="RSS", type ="l")
-mnrss=which.min(reg_fwd_sum$rss)
-#Plotting min RSS
-points(mnrss, reg_fwd_sum$adjr2[mnrss], col="red", cex=2, pch=20)
-
-#Adjusted R^2
-plot(reg_fwd_sum$adjr2, xlab="Number of variables", ylab="Adjusted R^2", type ="l")
-mxr2=which.max(reg_fwd_sum$adjr2)
-#Plotting max adjusted R^2
-points(mxr2, reg_fwd_sum$adjr2[mxr2], col="red", cex=2, pch=20)
-
-#CP
-plot(reg_fwd_sum$cp, xlab = "Number of variables", ylab="CP", type = "l")
-mncp=which.min(reg_fwd_sum$cp)
-points(mncp, reg_fwd_sum$cp[mncp], col="blue", cex=2, pch=20)
-
-#BIC
-plot(reg_fwd_sum$bic, xlab="Number of variables", ylab = "BIC", type="l")
-mnbic=which.min(reg_fwd_sum$bic)
-points(mnbic, reg_fwd_sum$bic[mnbic], col="green", pch=20, cex=2)
-```
-
-*Plotting Selected Variables*
-```{r}
-plot(regfit_fwd, scale="r2")
-plot(regfit_fwd, scale="adjr2")
-plot(regfit_fwd, scale="Cp")
-plot(regfit_fwd, scale="bic")
-```
-
-*Coef of models*
-```{r}
-"model with highest adjusted R^2"
-coef(regfit_fwd, mxr2) #model with highest adjusted R^2
-"model with lowest CP"
-coef(regfit_fwd, mncp) #model with lowest CP
-"model with lowest BIC"
-coef(regfit_fwd, mnbic) #model with lowest BIC
-```
-
-#### Backward Selection
-
-```{r}
-regfit_bwd = regsubsets(status~.,pd2[train,], nvmax=23, method = "backward")
-summary(regfit_bwd)
-reg_bwd_sum=summary(regfit_bwd) #returns R^2, adjusted R^2, AIC, BIC, Cp
-reg_bwd_sum
-names(reg_bwd_sum)
-names(regfit_bwd)
 ```
 
