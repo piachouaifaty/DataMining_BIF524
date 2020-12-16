@@ -357,7 +357,12 @@ train=tot[-test] #training set
 
 y.train=pd2[c(train), "status"]
 y.test=pd2[c(test), "status"]
+```
 
+
+```{r}
+y.train
+y.test
 ```
 
 #### Best Subset Selection
@@ -371,7 +376,7 @@ names(regfit_full)
 ```
 
 *Plotting*
-```{r plotting RSS, BIC...}
+```{r}
 par(mfrow=c(2,2))
 
 #RSS
@@ -403,7 +408,7 @@ Adjusted R^2 max is around 8.
 As expected, RSS decreases as more predictors are added, but this is not indicative of test error rate.
 
 *Plotting Selected Variables*
-```{r plotting variables according to BIC, RSS...}
+```{r}
 plot(regfit_full, scale="r2")
 plot(regfit_full, scale="adjr2")
 plot(regfit_full, scale="Cp")
@@ -909,6 +914,7 @@ rf.pd=randomForest(pd2[,"status"]~., pd2[,1:22], subset=train, mtry=6, importanc
 yhat.rf=predict(rf.pd, newdata = pd2[test,])
 rf.pd
 ```
+
 ```{r}
 plot(rf.pd)
 ```
@@ -925,4 +931,808 @@ Random Forest performed almost as well as bagging
 ```{r}
 importance(rf.pd)
 ```
+
+### Boosting
+
+### Boosting
+
+```{r}
+library(gbm)
+#gbm() with the option distribution="gaussian" since this is a regression problem; if it were a bi- nary classification problem, we would use distribution="bernoulli". The argument n.trees=5000 indicates that we want 5000 trees, and the option interaction.depth=4 limits the depth of each tree
+
+set.seed(4706)
+
+boost.pd=gbm(pd2[train,"status"]~., pd2[train,1:22], distribution = "gaussian", n.trees=5000, interaction.depth=4)
+#shrinkage=0.001 by default
+#can change it
+summary(boost.pd)
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(boost.pd, i="spread1")
+plot(boost.pd, i="MDVP.Fo.Hz.")
+```
+
+
+## Analysis on Averaged Dataset (observations = individuals)
+
+```{r}
+pdavg$status=as.factor(pdavg$status)
+```
+
+```{r}
+summary(pdavg)
+```
+
+### Plotting for Visualization
+
+```{r}
+pairs(pdavg[,-1], col=pdavg$status)
+#red=parkinson's
+```
+
+```{r}
+plot(pdavg$PPE, pdavg$spread1, col=pdavg$status)
+```
+
+```{r}
+plot(pdavg$PPE, pdavg$spread1, col=pdavg$status)
+```
+
+
+```{r}
+pd2avg=pdavg[,-1]
+rownames(pd2avg) = pdavg[,1]
+pd2avg=pd2avg[,-17]
+par(mfrow=c(3,3))
+for (i in colnames(pd2avg))
+  {hist(pd2avg[,i], main=i)}
+
+```
+
+```{r}
+par(mfrow=c(1,3))
+for (i in colnames(pd2avg))
+  {boxplot(pd2avg[,i], main=i)}
+```
+
+Fewer outliers after averaging
+
+```{r}
+outl=boxplot.stats(pd2avg[,"MDVP.Flo.Hz."])$out
+ind=which(pd2avg[,"MDVP.Flo.Hz."] %in% c(outl))
+pd2avg[c(ind),]
+```
+```{r}
+pdavg[c(ind),]
+```
+Both healthy, not going to remove (will lost 2 out of 8)
+
+### Unsupervised Learning Methods for Visualization
+
+```{r}
+pca_pdavg=prcomp(pd2avg, scale=TRUE)
+```
+
+```{r}
+str(pca_pdavg)
+```
+
+
+```{r}
+ggbiplot(pca_pdavg)
+```
+
+```{r}
+biplot(pca_pdavg, scale=0)
+```
+
+```{r}
+ggbiplot(pca_pdavg, labels=rownames(pd2avg))
+```
+
+```{r}
+disease_stat=ifelse(pdavg$status=="1", "PD", "HLT")
+ggbiplot(pca_pdavg,ellipse=TRUE, groups=disease_stat)
+```
+Clustering seems to make a bit more sense here  
+
+```{r}
+head(pca_pdavg$rotation)
+```
+
+Proprotion of Variance Explained by PC1
+
+```{r}
+pr.var=pca_pdavg$sdev^2
+pve=pr.var/sum(pr.var)
+par(mfrow=c(1,2))
+plot(pve, xlab="Principal Component", ylab="Proportion of Variance Explained ", ylim=c(0,1),type="b")
+plot(cumsum(pve), xlab="Principal Component ", ylab=" Cumulative Proportion of Variance Explained ", ylim=c(0,1), type="b")
+```
+
+PC1 explains 61.8% of the variance  
+
+
+#### Clustering
+
+Clustering with K=2
+```{r}
+km.pd2avg=kmeans(pd2avg,2,nstart=20)
+```
+
+```{r}
+head(km.pd2avg$cluster)
+```
+
+```{r}
+head(pdavg$status)
+s=ifelse(pdavg$status==1, 1, 2) #so the colors match
+head(s) 
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+for (i in colnames(pd2avg))
+{plot(pd2avg[,i], col=(km.pd2avg$cluster), main="K-Means Clustering; K=2", xlab="", ylab=i, pch=20, cex=2)
+plot(pd2avg[,i], col=(s), main="By Status; black=PD", xlab="", ylab=i, pch=20, cex=2)}
+```
+Clustering seems to make a lot more sense now. General trends of the 2 clusters look similar to the actual response classes.
+
+#### Training and Test Sets
+
+Since there are only 8 healthy individuals, I make sure to include a sufficient number in the training and test sets, so I split them into healthy vs diseased, sample from each, and then combine them into training and test sets.
+
+```{r}
+pd2avg=cbind(pd2avg, pdavg[,"status"])
+
+```
+
+```{r}
+colnames(pd2avg)=c("MDVP.Fo.Hz.",      "MDVP.Fhi.Hz." ,    "MDVP.Flo.Hz."  ,   "MDVP.Jitter..." ,  "MDVP.Jitter.Abs." ,"MDVP.RAP"     ,   "MDVP.PPQ"    ,     "Jitter.DDP"  ,     "MDVP.Shimmer"   ,  "MDVP.Shimmer.dB." ,"Shimmer.APQ3"   ,  "Shimmer.APQ5" ,   
+ "MDVP.APQ"  ,       "Shimmer.DDA"  ,    "NHR" ,             "HNR"    ,          "RPDE"    ,         "DFA"     ,        
+"spread1"     ,     "spread2"      ,    "D2"        ,       "PPE"      ,        "status")
+```
+
+```{r}
+pd_dis_idx=which(pd2avg$status==1) #indeces of PD individuals
+pd_health_idx=which(pd2avg$status==0) #indeces of healthy individuals
+#length(pd_health_idx)
+#length(pd_dis_idx)
+set.seed(4706)
+
+#length(pd_dis_idx)
+#length(pd_health_idx)
+
+#total: 24 diseased, 8 healthy
+
+#12 diseased test
+#4 healthy test
+#12 diseased train
+#4 healthy train
+
+test_health=sample(pd_health_idx, 4, replace = FALSE) #sample from indeces
+#test_health
+
+test_dis=sample(pd_dis_idx, 12, replace = FALSE) #sample from indeces
+#test_dis
+
+testavg=append(test_dis, test_health) #test set
+
+tot=1:nrow(pd2avg)
+
+trainavg=tot[-testavg] #training set
+#trainavg
+#testavg
+
+y.trainavg=pd2avg[trainavg, "status"]
+y.testavg=pd2avg[testavg, "status"]
+
+y.trainavg
+y.testavg
+#trainavg
+#testavg
+```
+
+ 
+#### Best Subset Selection
+
+```{r}
+regfit_fullavg=regsubsets(status~., data=pd2avg, subset=train, nvmax=23) #nvmax=p
+reg_full_sumavg=summary(regfit_fullavg) #returns R^2, adjusted R^2, AIC, BIC, Cp
+reg_full_sumavg
+names(reg_full_sumavg)
+names(regfit_fullavg)
+```
+
+*Plotting*
+```{r}
+par(mfrow=c(2,2))
+
+#RSS
+plot(reg_full_sumavg$rss, xlab="Number of variables", ylab="RSS", type ="l")
+mnrss=which.min(reg_full_sumavg$rss)
+#Plotting min RSS
+points(mnrss, reg_full_sumavg$adjr2[mnrss], col="red", cex=2, pch=20)
+
+#Adjusted R^2
+plot(reg_full_sumavg$adjr2, xlab="Number of variables", ylab="Adjusted R^2", type ="l")
+mxr2=which.max(reg_full_sumavg$adjr2)
+#Plotting max adjusted R^2
+points(mxr2, reg_full_sumavg$adjr2[mxr2], col="red", cex=2, pch=20)
+
+
+#BIC
+plot(reg_full_sumavg$bic, xlab="Number of variables", ylab = "BIC", type="l")
+mnbic=which.min(reg_full_sum$bic)
+points(mnbic, reg_full_sumavg$bic[mnbic], col="green", pch=20, cex=2)
+```
+
+BIC selects for a smaller model (5 predictors) (heavier penalty)  
+Adjusted R^2 max is around 5 as well.  
+As expected, RSS decreases as more predictors are added, but this is not indicative of test error rate.
+
+*Plotting Selected Variables*
+```{r}
+plot(regfit_fullavg, scale="r2")
+plot(regfit_fullavg, scale="adjr2")
+plot(regfit_fullavg, scale="bic")
+```
+
+*Coef of models*
+```{r}
+"model with highest adjusted R^2"
+coef(regfit_fullavg, mxr2) #model with highest adjusted R^2
+"model with lowest CP"
+coef(regfit_fullavg, mncp) #model with lowest CP
+"model with lowest BIC"
+coef(regfit_fullavg, mnbic) #model with lowest BIC
+```
+
+### Ridge Regression & Lasso
+
+```{r}
+x=model.matrix(status~., pd2avg)[,-1] #[,-1] to remove the intercept
+y=pd2avg$status
+#automatically transforms any qualitative variables into dummy variables
+```
+
+#### Ridge Regression
+
+```{r}
+#standardizes by default
+#alpha=0 ridge regression,  alpha=1  lasso
+grid=10^seq(10, -2, length=100) #10 to the power of a sequence -> our lambda values
+grid
+ridge.mod=glmnet(x, y, alpha=0, lambda=grid, family = "binomial")
+#rows (predictors), columns (lambda values)
+```
+
+```{r}
+ridge.mod$lambda[50] #lambda value
+coef(ridge.mod)[,50] #coef for this lambda value (index)
+```
+*Estimating Test Error*
+
+```{r}
+ridge.mod=glmnet(x[trainavg,],y[trainavg],alpha=0,lambda=grid, thresh=1e-12, family = "binomial")
+ridge.pred=predict(ridge.mod,s=4,newx=x[testavg,])
+mean((ridge.pred-y.testavg)^2)
+
+#check vs least squares lambda=0
+ridge.pred=predict(ridge.mod, s=0, newx=x[testavg,], exact = T, x=x[trainavg,], y=y[trainavg]) 
+mean((ridge.pred-y.testavg)^2)
+
+lm(y~x, subset = trainavg)
+predict(ridge.mod,s=0, exact = T, type="coefficients", x=x[trainavg,], y=y[trainavg])[1:20,]
+```
+
+*Cross Validation for Ridge*
+
+```{r}
+set.seed(4706)
+cv.out=cv.glmnet(x[trainavg,], y[trainavg], alpha=0, family = "binomial")
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+
+#predict on test using best lambda
+ridge.pred=predict(ridge.mod, s=bestlam, newx=x[testavg,])
+mean((ridge.pred-y.testavg)^2)
+
+#refit on full data
+out=glmnet(x,y,alpha=0, family = "binomial")
+predict(out,type="coefficients",s=bestlam)[1:20,]
+```
+
+#### Lasso
+
+```{r}
+#Fitting on training data
+lasso.mod=glmnet(x[trainavg,], y[trainavg], alpha=1, lambda=grid, family="binomial")
+plot(lasso.mod)
+```
+
+
+```{r}
+#Getting best lambda 
+set.seed(4706)
+cv.out=cv.glmnet(x[trainavg,], y[trainavg], alpha=1, family="binomial")
+plot(cv.out)
+```
+
+
+```{r}
+bestlam=cv.out$lambda.min #lambda.min=lambda with lowest error
+bestlam
+lasso.pred=predict(lasso.mod, s=bestlam, newx=x[testavg,])
+mean((lasso.pred!=y.testavg))
+```
+
+
+```{r}
+#Refitting on full data using best lambda
+out=glmnet(x, y, alpha=1, lambda=grid, family="binomial")
+lasso.coef=predict(out, type="coefficients", s=bestlam)
+lasso.coef
+```
+
+Lasso: spread1+spread2
+Best Subsets: MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.Flo.Hz.+MDVP.Jitter...+MDVP.Jitter.Abs.
+
+### Logistic Regression
+
+I fit a logistic regression model on the training data
+
+```{r}
+logist_reg_fit=glm(status~., data=pd2avg, family="binomial", subset=trainavg)
+
+summary(logist_reg_fit)
+
+#"Coefficients"
+#coef(logist_reg_fit)
+
+#"P-Values"
+#summary(logist_reg_fit)$coef[ ,4]
+alias(logist_reg_fit)
+```
+
+
+```{r}
+contrasts(pd2avg[,"status"])
+```
+
+```{r}
+glm_probs = predict(logist_reg_fit, pd2avg[testavg,], type="response")
+head(glm_probs)
+glm_pred=ifelse(glm_probs>0.5, 1, 0)
+head(glm_pred)
+```
+
+```{r}
+length(glm_pred)
+length(y.testavg)
+table(glm_pred, y.testavg)
+```
+
+Classification Error
+```{r}
+mean(glm_pred!=y.testavg)
+```
+Accuracy
+```{r}
+mean(glm_pred==y.testavg)
+```
+
+
+```{r}
+colnames(pd2)
+```
+
+
+```{r}
+logist_reg_fit2=glm(status~MDVP.Fhi.Hz.+MDVP.APQ+NHR+RPDE+spread1+D2+PPE, data=pd2avg, family=binomial, subset=trainavg)
+summary(logist_reg_fit)
+```
+
+```{r}
+glm_probs = predict(logist_reg_fit2, pd2[testavg,], type="response")
+head(glm_probs)
+glm_pred=ifelse(glm_probs>0.5, 1, 0)
+head(glm_pred)
+```
+
+```{r}
+table(glm_pred, y.testavg)
+```
+
+```{r}
+"Error"
+mean(glm_pred!=y.testavg)
+
+"Accuracy"
+
+mean(glm_pred==y.testavg)
+```
+
+
+### LDA
+```{r}
+lda_fit = lda(status~., data=pd2avg[,-5], subset=trainavg)
+lda_fit
+plot(lda_fit) #produces plots of the linear discriminants
+```
+
+```{r }
+lda_pred = predict(lda_fit, pd2avg[testavg,])
+names(lda_pred) #the names are  class, contains LDA’s predictions
+
+lda_class = lda_pred$class #the class predictions of our fitted model on test data
+table(lda_class, y.testavg) #predictions vs real values of test data
+contrasts(pd2[,"status"]) #the one with value=1 is the one for which we are getting the posterior probability
+
+"Accuracy"
+mean(lda_class==y.testavg)
+"Classification Error"
+mean(lda_class!=y.testavg)
+
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+sum(lda_pred$posterior[,1]>=0.5) #observations with predicted proba >0.5
+sum(lda_pred$posterior[,1]<0.5)
+
+#MY OWN POSTERIOR PROBABILITY THRESHOLD
+#sum(lda_pred$posterior[,1]>0.9) #observations with predicted proba >0.9
+#my_threshlold_classes=ifelse(lda_pred$posterior[,1]>0.9, "yes", "no") #yes being the one with contrast=1
+```
+
+```{r}
+#CV for LDA
+k=10 #number of folds
+Dataset=pd2avg
+
+set.seed(4706)
+folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+Dataset=cbind(Dataset, folds)
+table(folds) #to see that they are balanced
+error=vector()#error for each fold
+
+for (j in 1:k) #j refers to folds
+{
+  lda_fit = lda(status~., data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+  lda_pred = predict(lda_fit, Dataset[folds==j,]) #test data, current fold
+  lda_class = lda_pred$class #the class predictions of our fitted model on test data
+  error=append(error, mean(lda_class!=Dataset[folds==j, "status"])) #cv error
+}
+
+cv_error=mean(error)
+cv_error
+```
+
+*Using Predictors Selected by Lasso*
+
+```{r}
+lda_fit = lda(status~spread1+spread2, data=pd2avg[,-5], subset=trainavg)
+lda_fit
+plot(lda_fit) #produces plots of the linear discriminants
+```
+
+```{r }
+lda_pred = predict(lda_fit, pd2avg[testavg,])
+names(lda_pred) #the names are  class, contains LDA’s predictions
+
+lda_class = lda_pred$class #the class predictions of our fitted model on test data
+table(lda_class, y.testavg) #predictions vs real values of test data
+contrasts(pd2[,"status"]) #the one with value=1 is the one for which we are getting the posterior probability
+
+"Accuracy"
+mean(lda_class==y.testavg)
+"Classification Error"
+mean(lda_class!=y.testavg)
+
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+
+sum(lda_pred$posterior[,1]>=0.5) #observations with predicted proba >0.5
+sum(lda_pred$posterior[,1]<0.5)
+
+#MY OWN POSTERIOR PROBABILITY THRESHOLD
+#sum(lda_pred$posterior[,1]>0.9) #observations with predicted proba >0.9
+#my_threshlold_classes=ifelse(lda_pred$posterior[,1]>0.9, "yes", "no") #yes being the one with contrast=1
+```
+
+```{r}
+#CV for LDA
+k=10 #number of folds
+Dataset=pd2avg
+
+set.seed(4706)
+folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+Dataset=cbind(Dataset, folds)
+table(folds) #to see that they are balanced
+error=vector()#error for each fold
+
+for (j in 1:k) #j refers to folds
+{
+  lda_fit = lda(status~spread1+spread2, data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+  lda_pred = predict(lda_fit, Dataset[folds==j,]) #test data, current fold
+  lda_class = lda_pred$class #the class predictions of our fitted model on test data
+  error=append(error, mean(lda_class!=Dataset[folds==j, "status"])) #cv error
+}
+
+cv_error=mean(error)
+cv_error
+```
+
+### QDA
+
+```{r echo=TRUE}
+#qda_fit=qda(status~., data=pd2avg, subset = trainavg)
+#qda_fit
+
+#qda_class=predict(qda_fit, pd2avg[testavg,])$class
+#table(qda_class, y.testavg)
+
+#"Accuracy"
+#mean(qda_class==y.testavg)
+
+#"Classification Error"
+#mean(qda_class!=y.testavg)
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+```
+
+
+```{r eval=FALSE, include=FALSE}
+#CV for QDA
+#k=10 #number of folds
+#Dataset=pd2avg
+
+#set.seed(4706)
+#folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+#Dataset=cbind(Dataset, folds)
+#table(folds) #to see that they are balanced
+#error=vector()#error for each fold
+
+#for (j in 1:k) #j refers to folds
+#{
+ # qda_fit = qda(status~., data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+ # qda_class=predict(qda_fit, Dataset[folds==j,])$class #test data, current fold
+#  error=append(error, mean(qda_class!=Dataset[folds==j, "status"])) #cv error
+#}
+
+#cv_error=mean(error)
+#cv_error
+```
+
+*Using Predictors Selected by Lasso*
+```{r include=FALSE}
+#qda_fit=qda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=pd2, subset = train)
+#qda_fit
+
+#qda_class=predict(qda_fit, pd2[test,])$class
+#table(qda_class, y.test)
+
+#"Accuracy"
+#mean(qda_class==y.test)
+
+#"Classification Error"
+#mean(qda_class!=y.test)
+#FNR=(FN/total positives)x100
+#FPR=(FP/total negatives)x100 = 1-specificity = Type I error
+#overall error=(FP+FN)/total x100
+#sensitivity = TPR = (TP/Total positives) x100
+```
+
+```{r}
+#CV for QDA
+#k=10 #number of folds
+#Dataset=pd2
+
+#set.seed(4706)
+#folds=sample(1:k, nrow(Dataset), replace=TRUE)
+#folds
+#Dataset=cbind(Dataset, folds)
+#table(folds) #to see that they are balanced
+#error=vector()#error for each fold
+
+#for (j in 1:k) #j refers to folds
+#{
+  #qda_fit = qda(status~MDVP.Fo.Hz.+MDVP.Fhi.Hz.+MDVP.APQ+DFA+spread1+spread2+D2, data=Dataset[folds!=j,-5]) #this is the training data, those NOT in the current fold
+
+  #qda_class=predict(qda_fit, Dataset[folds==j,])$class #test data, current fold
+  #error=append(error, mean(qda_class!=Dataset[folds==j, "status"])) #cv error
+#}
+
+#cv_error=mean(error)
+#cv_error
+```
+
+### Trees
+
+```{r}
+tree.pd=tree(pd2avg[,"status"]~., pd2avg[,1:22], subset=trainavg)
+summary(tree.pd)
+```
+
+```{r}
+plot(tree.pd)
+text(tree.pd, pretty=0)
+```
+Spread1 seems to be the most important predictor here.
+
+```{r}
+tree.pred=predict(tree.pd, pd2avg[testavg,], type="class")
+table(tree.pred, y.testavg)
+```
+```{r}
+"Accuracy"
+mean(tree.pred==y.testavg)
+"Error"
+mean(tree.pred!=y.testavg)
+```
+
+#### Pruning
+
+The test error rate seems good. We consider pruning the tree.
+```{r}
+set.seed(4706)
+cv.pd=cv.tree(tree.pd, FUN=prune.misclass)
+names(cv.pd)
+```
+
+```{r}
+cv.pd
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+plot(cv.pd$size, cv.pd$dev, type="b", ylab="cv error")
+plot(cv.pd$k, cv.pd$dev, type="b", ylab = "cv error")
+```
+
+Prune the tree and obtain the 2-node tree
+
+```{r}
+pruned.pd=prune.misclass(tree.pd, best=2)
+plot(pruned.pd)
+text(pruned.pd, pretty=0)
+```
+
+```{r}
+pruned.pred=predict(pruned.pd, pd2avg[testavg,], type="class")
+table(pruned.pred, y.testavg)
+```
+
+```{r}
+"Accuracy"
+mean(pruned.pred==y.testavg)
+"Error"
+mean(pruned.pred!=y.testavg)
+```
+
+The unpruned tree actually performed better than the pruned tree.
+
+#### Bagging and Random Forest
+
+*BAGGING*
+
+```{r}
+#bagging
+set.seed(4706)
+bag.pd=randomForest(pd2avg[,"status"]~., pd2avg[,1:22], subset=trainavg, mtry=13, importance=TRUE)
+#mtry: Number of variables randomly sampled as candidates at each split. Note that the default values are different for classification (sqrt(p) where p is number of variables in x) and regression (p/3)
+bag.pd
+```
+
+
+```{r}
+plot(bag.pd)
+```
+
+
+```{r}
+yhat.bag=predict(bag.pd, newdata = pd2avg[testavg,])
+plot(yhat.bag, y.testavg, xlab="bagging pred", ylab="actual")
+"Error"
+mean(yhat.bag!=y.testavg)
+"Accuracy"
+mean(yhat.bag==y.testavg)
+```
+
+*RANDOM FOREST*
+
+```{r}
+set.seed(4706)
+rf.pd=randomForest(pd2avg[,"status"]~., pd2avg[,1:22], subset=trainavg, mtry=6, importance=TRUE)
+yhat.rf=predict(rf.pd, newdata = pd2avg[testavg,])
+rf.pd
+```
+
+```{r}
+plot(rf.pd)
+```
+
+```{r}
+"Error"
+mean(yhat.rf!=y.testavg)
+"Accuracy"
+mean(yhat.rf==y.testavg)
+```
+
+
+```{r}
+importance(rf.pd)
+```
+
+
+### Boosting
+
+```{r}
+#ibrary(gbm)
+#gbm() with the option distribution="gaussian" since this is a regression problem; if it were a bi- nary classification problem, we would use distribution="bernoulli". The argument n.trees=5000 indicates that we want 5000 trees, and the option interaction.depth=4 limits the depth of each tree
+
+#set.seed(4706)
+
+#boost.pd=gbm(pd2avg[trainavg,"status"]~., pd2avg[trainavg,1:22], distribution = "gaussian", n.trees=5000, interaction.depth=4)
+#shrinkage=0.001 by default
+#can change it
+#summary(boost.pd)
+```
+
+```{r}
+#par(mfrow=c(1,2))
+#plot(boost.pd, i="spread1")
+#plot(boost.pd, i="MDVP.Fo.Hz.")
+```
+
+P-values are all very large
+
+```{r}
+contrasts(pd2avg[,"status"])
+```
+
+```{r}
+glm_probsavg = predict(logist_reg_fitavg, pd2avg[testavg,], type="response")
+head(glm_probsavg)
+
+glm_predavg=ifelse(glm_probsavg>0.5, 1, 0)
+head(glm_predavg)
+```
+
+```{r}
+length(glm_predavg)
+length(y.testavg)
+table(glm_predavg, y.testavg)
+```
+
+Classification Error
+```{r}
+mean(glm_predavg!=y.testavg)
+```
+
+Accuracy
+```{r}
+mean(glm_predavg==y.testavg)
+```
+
+
+
+
 
