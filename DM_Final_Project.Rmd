@@ -1732,7 +1732,13 @@ Accuracy
 mean(glm_predavg==y.testavg)
 ```
 
-
+Logistic Regression	0.1752577
+LDA (full)	0.1172264
+QDA (full)	0.1384934
+Tree (full)	0.1443299
+Tree (pruned)	0.1649485
+Bagging	0.07216495
+Random Forest	0.08247423
 
 
 
